@@ -6,22 +6,28 @@ class Fight {
   }
 
   startFight(enemyX, enemyY) {
-  // Find enemy
   const enemyIndex = this.game.enemies.findIndex(e => e.x === enemyX && e.y === enemyY);
   if (enemyIndex === -1) return;
   
   const enemy = this.game.enemies[enemyIndex];
   
-  // Use existing monster data or create new
   this.currentEnemy = enemy.monsterData || getRandomMonster();
   
   // Remove enemy from map
   this.game.enemies.splice(enemyIndex, 1);
   this.game.render();
   
-  this.inFight = true;
+  // Broadcast to other players
+  if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
+    this.game.lobby.socket.emit('map_event', {
+      gameName: this.game.lobby.gameName,
+      type: 'enemy_killed',
+      x: enemyX,
+      y: enemyY
+    });
+  }
   
-  // Calculate fight
+  this.inFight = true;
   this.resolveFight();
 }
 

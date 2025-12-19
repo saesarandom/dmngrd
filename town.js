@@ -23,6 +23,14 @@ class Town {
     this.game.currentTown = this;
     this.game.render();
     this.game.setMessage(`Welcome to ${this.name}! Press E near NPCs to interact.`);
+    
+    // Notify server of location change
+    if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
+      this.game.lobby.socket.emit('update_location', {
+        gameName: this.game.lobby.gameName,
+        location: this.name
+      });
+    }
   }
 
   exit() {
@@ -31,9 +39,33 @@ class Town {
     this.game.inTown = false;
     this.game.lastTown = this.name;
     this.game.currentTown = null;
-    this.game.generateMap();
+    
+    console.log('=== LEAVING TOWN ===');
+    console.log('Current mapSeed:', this.game.mapSeed);
+    
+    // ALWAYS use existing seed for multiplayer consistency
+    if (this.game.mapSeed) {
+      console.log('Generating with existing seed:', this.game.mapSeed);
+      this.game.generateMap(this.game.mapSeed);
+    } else {
+      console.log('No seed found, generating new one');
+      this.game.generateMap();
+    }
+    
+    console.log('After generation, seed is:', this.game.mapSeed);
+    console.log('Enemies count:', this.game.enemies.length);
+    console.log('Traps count:', this.game.traps.length);
+    
     this.game.render();
     this.game.setMessage(`You left the ${this.name} and entered the wilderness.`);
+    
+    // Notify server of location change
+    if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
+      this.game.lobby.socket.emit('update_location', {
+        gameName: this.game.lobby.gameName,
+        location: 'wilderness'
+      });
+    }
   }
 
   drawTown(ctx, cellSize) {
@@ -104,27 +136,26 @@ const createSkargnes = (game) => {
     { x: 10, y: 10, name: 'Blacksmith' }
   ];
   
-  const edge = Math.floor(Math.random() * 4); // 0=top, 1=right, 2=bottom, 3=left
-let exitX, exitY;
+  const edge = Math.floor(Math.random() * 4);
+  let exitX, exitY;
 
-if (edge === 0) { // top
-  exitX = Math.floor(Math.random() * town.width);
-  exitY = 0;
-} else if (edge === 1) { // right
-  exitX = town.width - 1;
-  exitY = Math.floor(Math.random() * town.height);
-} else if (edge === 2) { // bottom
-  exitX = Math.floor(Math.random() * town.width);
-  exitY = town.height - 1;
-} else { // left
-  exitX = 0;
-  exitY = Math.floor(Math.random() * town.height);
-}
+  if (edge === 0) {
+    exitX = Math.floor(Math.random() * town.width);
+    exitY = 0;
+  } else if (edge === 1) {
+    exitX = town.width - 1;
+    exitY = Math.floor(Math.random() * town.height);
+  } else if (edge === 2) {
+    exitX = Math.floor(Math.random() * town.width);
+    exitY = town.height - 1;
+  } else {
+    exitX = 0;
+    exitY = Math.floor(Math.random() * town.height);
+  }
 
-town.exits = [
-  { x: exitX, y: exitY, direction: 'exit' }
-];
+  town.exits = [
+    { x: exitX, y: exitY, direction: 'exit' }
+  ];
+  
   return town;
 };
-
-//lullin nové město

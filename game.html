@@ -124,6 +124,8 @@
   </div>
 
   <div id="info">Press R to change resolution</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
   <script src="movement.js"></script>
   <script src="town.js"></script>
   <script src="simulate.js"></script>
@@ -132,8 +134,12 @@
 <script src="monsters.js"></script>
 <script src="fight.js"></script>
 <script src="skills.js"></script>
+<script src="lobby.js"></script>
+<script src="game.js"></script>
+
   <script>
-    class Game {
+   
+class Game {
   constructor() {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx = this.canvas.getContext('2d');
@@ -141,87 +147,65 @@
     this.cellSize = 32;
     this.resolutionMenu = document.getElementById('resolutionMenu');
     this.menuOpen = false;
+    this.otherPlayers = [];
+    this.mapSeed = null;
     
     this.enemies = [];
     this.traps = [];
+    this.shrines = [];
     this.player = { x: 0, y: 0 };
     this.message = '';
-    this.hoveredEnemy = null; // Add this
+    this.hoveredEnemy = null;
     this.setMessage('Welcome to the game!');
 
-    this.generateMap();
+    
     this.setupCanvas();
     this.setupEventListeners();
-    this.setupMouseTracking(); // Add this
-    
+    this.setupMouseTracking();
   }
 
-
-
-
-
-testImageFilter(color, opacity, itemType) {
-  if (!this.imageFilters) this.imageFilters = {};
+  generateMap(seed = null) {
+  // Save current random state
+  const savedRandom = Math.random;
   
-  if (itemType) {
-    // Apply to specific item type only (weapon, armor, helm, shield)
-    this.imageFilters[itemType] = { color: color, opacity: opacity };
+  if (seed) {
+    this.mapSeed = seed;
+    Math.seedrandom(seed);
   } else {
-    // Apply to all items
-    this.imageFilter = { color: color, opacity: opacity };
+    this.mapSeed = Date.now();
+    Math.seedrandom(this.mapSeed);
   }
-  
-  this.render();
-  console.log(`Filter applied to ${itemType || 'all items'}: ${color} with opacity ${opacity}`);
-}
 
-removeImageFilter(itemType) {
-  if (itemType) {
-    if (this.imageFilters) {
-      delete this.imageFilters[itemType];
-    }
-  } else {
-    this.imageFilter = null;
-    this.imageFilters = {};
-  }
-  this.render();
-  console.log(`Filter removed from ${itemType || 'all items'}`);
-}
-
-
-
-
-  generateMap() {
-    // Generate enemies first
-    this.enemies = [];
-    for (let y = 0; y < this.gridSize; y++) {
-      for (let x = 0; x < this.gridSize; x++) {
-        if (Math.random() < 1/128) {
-          this.enemies.push({ x, y });
-        }
-      }
-    }
-
-    // Find all empty cells
-    const emptyCells = [];
-    for (let y = 0; y < this.gridSize; y++) {
-      for (let x = 0; x < this.gridSize; x++) {
-        const isOccupied = this.enemies.some(e => e.x === x && e.y === y);
-        if (!isOccupied) {
-          emptyCells.push({ x, y });
-        }
-      }
-    }
-
-    // Generate traps on empty cells
-    this.traps = [];
-    emptyCells.forEach(cell => {
+  // Generate enemies
+  this.enemies = [];
+  for (let y = 0; y < this.gridSize; y++) {
+    for (let x = 0; x < this.gridSize; x++) {
       if (Math.random() < 1/128) {
-        this.traps.push({ x: cell.x, y: cell.y });
+        this.enemies.push({ x, y });
       }
-    });
+    }
+  }
 
-    // Generate shrines on empty cells (not on traps)
+  // Find empty cells
+  const emptyCells = [];
+  for (let y = 0; y < this.gridSize; y++) {
+    for (let x = 0; x < this.gridSize; x++) {
+      const isOccupied = this.enemies.some(e => e.x === x && e.y === y);
+      if (!isOccupied) {
+        emptyCells.push({ x, y });
+      }
+    }
+  }
+
+  // Generate traps
+  this.traps = [];
+  emptyCells.forEach(cell => {
+    if (Math.random() < 1/128) {
+      this.traps.push({ x: cell.x, y: cell.y });
+    }
+  });
+
+  // Generate shrines
   this.shrines = [];
   emptyCells.forEach(cell => {
     const hasTrap = this.traps.some(trap => trap.x === cell.x && trap.y === cell.y);
@@ -230,23 +214,66 @@ removeImageFilter(itemType) {
     }
   });
 
-  // Filter out cells with traps and shrines for player spawn
+  // Safe spawn - DON'T use random for player spawn in multiplayer
   const safeCells = emptyCells.filter(cell => 
     !this.traps.some(trap => trap.x === cell.x && trap.y === cell.y) &&
     !this.shrines.some(shrine => shrine.x === cell.x && shrine.y === cell.y)
   );
 
-  // Pick random safe cell for player
-  const randomIndex = Math.floor(Math.random() * safeCells.length);
-  this.player = safeCells[randomIndex];
-}
+  // Use first safe cell or center for multiplayer consistency
+  if (safeCells.length > 0) {
+    // Always use same spawn point for all players
+    this.player = safeCells[0]; // Don't randomize in multiplayer
+  }
 
-checkShrine(x, y) {
+  // Reset random - IMPORTANT!
+  Math.seedrandom();
+  Math.random = savedRandom;
+}
+  updateOtherPlayers(players) {
+    // Get current location
+    const currentLocation = this.inTown && this.currentTown 
+      ? this.currentTown.name 
+      : 'wilderness';
+    
+    // Filter by location AND exclude self
+    this.otherPlayers = players.filter(p => 
+      p.name !== this.character.name && 
+      p.location === currentLocation
+    );
+    this.render();
+  }
+
+  drawOtherPlayer(x, y, playerName) {
+    const px = x * this.cellSize;
+    const py = y * this.cellSize;
+    
+    this.ctx.fillStyle = '#4a9eff';
+    this.ctx.fillRect(px + 6, py + 6, this.cellSize - 12, this.cellSize - 12);
+    
+    this.ctx.fillStyle = '#4a9eff';
+    this.ctx.font = '10px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);
+  }
+
+  checkShrine(x, y) {
   const shrineIndex = this.shrines.findIndex(shrine => shrine.x === x && shrine.y === y);
   if (shrineIndex !== -1) {
     this.shrines.splice(shrineIndex, 1);
     this.setMessage('You activated a shrine!');
     this.render();
+    
+    // Broadcast to other players
+    if (this.lobby && this.lobby.socket && this.lobby.gameName) {
+      this.lobby.socket.emit('map_event', {
+        gameName: this.lobby.gameName,
+        type: 'shrine_activated',
+        x: x,
+        y: y
+      });
+    }
+    
     return true;
   }
   return false;
@@ -310,227 +337,221 @@ checkShrine(x, y) {
   }
 
   setMessage(text) {
-  this.message = text;
-  const messageBox = document.getElementById('messageBox');
-  messageBox.textContent = text;
-  messageBox.classList.add('show');
+    this.message = text;
+    const messageBox = document.getElementById('messageBox');
+    messageBox.textContent = text;
+    messageBox.classList.add('show');
+  }
+
+ checkTrap(x, y) {
+  const trapIndex = this.traps.findIndex(trap => trap.x === x && trap.y === y);
+  if (trapIndex !== -1) {
+    this.traps.splice(trapIndex, 1);
+    this.setMessage('You activated a trap!');
+    
+    // Broadcast to other players
+    if (this.lobby && this.lobby.socket && this.lobby.gameName) {
+      this.lobby.socket.emit('map_event', {
+        gameName: this.lobby.gameName,
+        type: 'trap_activated',
+        x: x,
+        y: y
+      });
+    }
+    
+    return true;
+  }
+  return false;
 }
 
-  checkTrap(x, y) {
-    const trapIndex = this.traps.findIndex(trap => trap.x === x && trap.y === y);
-    if (trapIndex !== -1) {
-      this.traps.splice(trapIndex, 1);
-      this.setMessage('You activated a trap!');
-      return true;
-    }
-    return false;
-  }
 
   setupMouseTracking() {
-  this.canvas.addEventListener('mousemove', (e) => {
-    const rect = this.canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    const gridX = Math.floor(mouseX / this.cellSize);
-    const gridY = Math.floor(mouseY / this.cellSize);
-    
-    // Check if hovering over an enemy
-    const enemy = this.enemies.find(e => e.x === gridX && e.y === gridY);
-    
-    if (enemy) {
-      // FIX: Only generate monster data once per enemy
-      if (!enemy.monsterData) {
-        enemy.monsterData = getRandomMonster();
+    this.canvas.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      const gridX = Math.floor(mouseX / this.cellSize);
+      const gridY = Math.floor(mouseY / this.cellSize);
+      
+      const enemy = this.enemies.find(e => e.x === gridX && e.y === gridY);
+      
+      if (enemy) {
+        if (!enemy.monsterData) {
+          enemy.monsterData = getRandomMonster();
+        }
+        this.hoveredEnemy = {
+          x: mouseX,
+          y: mouseY,
+          data: enemy.monsterData
+        };
+      } else {
+        this.hoveredEnemy = null;
       }
-      this.hoveredEnemy = {
-        x: mouseX,
-        y: mouseY,
-        data: enemy.monsterData
-      };
-    } else {
+      
+      this.render();
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
       this.hoveredEnemy = null;
+      this.render();
+    });
+  }
+
+  drawPlayer(x, y) {
+    const px = x * this.cellSize;
+    const py = y * this.cellSize;
+    const inventory = this.inventory;
+    
+    const centerX = px + this.cellSize / 2;
+    const centerY = py + this.cellSize / 2;
+    const itemSize = this.cellSize / 2;
+    
+    this.ctx.fillStyle = 'rgba(74, 255, 74, 0.1)';
+    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+    
+    if (inventory.equipped.helm) {
+      this.drawItemIcon(inventory.equipped.helm, centerX - itemSize/2, py + 2, itemSize, itemSize);
     }
     
-    this.render();
-  });
-
-  // Add this missing event listener
-  this.canvas.addEventListener('mouseleave', () => {
-    this.hoveredEnemy = null;
-    this.render();
-  });
-}
-
-drawPlayer(x, y) {
-  const px = x * this.cellSize;
-  const py = y * this.cellSize;
-  const inventory = this.inventory;
-  
-  // Calculate item positions within the cell
-  const centerX = px + this.cellSize / 2;
-  const centerY = py + this.cellSize / 2;
-  const itemSize = this.cellSize / 2;
-  
-  // Draw background (optional, for visibility)
-  this.ctx.fillStyle = 'rgba(74, 255, 74, 0.1)';
-  this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-  
-  // Draw helm (top center)
-  if (inventory.equipped.helm) {
-    this.drawItemIcon(inventory.equipped.helm, centerX - itemSize/2, py + 2, itemSize, itemSize);
-  }
-  
-  // Draw weapon (left center) - pushed further left
-  if (inventory.equipped.weapon) {
-    this.drawItemIcon(inventory.equipped.weapon, px - 4, centerY - itemSize/2, itemSize, itemSize);
-  }
-  
-  // Draw armor (center)
-  if (inventory.equipped.armor) {
-    this.drawItemIcon(inventory.equipped.armor, centerX - itemSize/2, centerY - itemSize/2, itemSize, itemSize);
-  }
-  
-  // Draw shield (right center) - pushed further right
-  if (inventory.equipped.shield) {
-    this.drawItemIcon(inventory.equipped.shield, px + this.cellSize - itemSize + 4, centerY - itemSize/2, itemSize, itemSize);
-  }
-  
-  // If nothing equipped, draw green square as fallback
-  if (!inventory.equipped.weapon && !inventory.equipped.armor && 
-      !inventory.equipped.helm && !inventory.equipped.shield) {
-    this.ctx.fillStyle = '#4aff4a';
-    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-  }
-}
-
-drawItemIcon(item, x, y, width, height) {
-  if (item.image) {
-    const img = new Image();
-    img.src = item.image;
+    if (inventory.equipped.weapon) {
+      this.drawItemIcon(inventory.equipped.weapon, px - 4, centerY - itemSize/2, itemSize, itemSize);
+    }
     
-    if (img.complete) {
-      // Check for item-specific filter first, then global filter
-      const filter = (this.imageFilters && this.imageFilters[item.type]) || this.imageFilter;
+    if (inventory.equipped.armor) {
+      this.drawItemIcon(inventory.equipped.armor, centerX - itemSize/2, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (inventory.equipped.shield) {
+      this.drawItemIcon(inventory.equipped.shield, px + this.cellSize - itemSize + 4, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (!inventory.equipped.weapon && !inventory.equipped.armor && 
+        !inventory.equipped.helm && !inventory.equipped.shield) {
+      this.ctx.fillStyle = '#4aff4a';
+      this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+    }
+  }
+
+  drawItemIcon(item, x, y, width, height) {
+    if (item.image) {
+      const img = new Image();
+      img.src = item.image;
       
-      if (filter) {
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const tempCtx = tempCanvas.getContext('2d');
+      if (img.complete) {
+        const filter = (this.imageFilters && this.imageFilters[item.type]) || this.imageFilter;
         
-        tempCtx.drawImage(img, 0, 0, width, height);
-        
-        tempCtx.globalCompositeOperation = 'source-atop';
-        tempCtx.fillStyle = filter.color;
-        tempCtx.globalAlpha = filter.opacity;
-        tempCtx.fillRect(0, 0, width, height);
-        
-        this.ctx.drawImage(tempCanvas, x, y);
+        if (filter) {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = width;
+          tempCanvas.height = height;
+          const tempCtx = tempCanvas.getContext('2d');
+          
+          tempCtx.drawImage(img, 0, 0, width, height);
+          
+          tempCtx.globalCompositeOperation = 'source-atop';
+          tempCtx.fillStyle = filter.color;
+          tempCtx.globalAlpha = filter.opacity;
+          tempCtx.fillRect(0, 0, width, height);
+          
+          this.ctx.drawImage(tempCanvas, x, y);
+        } else {
+          this.ctx.drawImage(img, x, y, width, height);
+        }
       } else {
-        this.ctx.drawImage(img, x, y, width, height);
+        img.onload = () => {
+          this.render();
+        };
+        img.onerror = () => {
+          this.ctx.fillStyle = this.getItemColor(item);
+          this.ctx.fillRect(x, y, width, height);
+        };
       }
     } else {
-      img.onload = () => {
-        this.render();
-      };
-      img.onerror = () => {
-        this.ctx.fillStyle = this.getItemColor(item);
-        this.ctx.fillRect(x, y, width, height);
-      };
+      this.ctx.fillStyle = this.getItemColor(item);
+      this.ctx.fillRect(x, y, width, height);
     }
-  } else {
-    this.ctx.fillStyle = this.getItemColor(item);
-    this.ctx.fillRect(x, y, width, height);
   }
-}
 
-getItemColor(item) {
-  switch(item.type) {
-    case 'weapon': return '#ff4a4a';
-    case 'armor': return '#4a9eff';
-    case 'helm': return '#ffff4a';
-    case 'shield': return '#ff8800';
-    default: return '#888888';
+  getItemColor(item) {
+    switch(item.type) {
+      case 'weapon': return '#ff4a4a';
+      case 'armor': return '#4a9eff';
+      case 'helm': return '#ffff4a';
+      case 'shield': return '#ff8800';
+      default: return '#888888';
+    }
   }
-}
 
- render() {
-  this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-  
-  // Draw grid background
-  for (let y = 0; y < this.gridSize; y++) {
-    for (let x = 0; x < this.gridSize; x++) {
-      const px = x * this.cellSize;
-      const py = y * this.cellSize;
-      
-      if ((x + y) % 2 === 0) {
-        this.ctx.fillStyle = '#1a1a1a';
-      } else {
-        this.ctx.fillStyle = '#0f0f0f';
+  render() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    for (let y = 0; y < this.gridSize; y++) {
+      for (let x = 0; x < this.gridSize; x++) {
+        const px = x * this.cellSize;
+        const py = y * this.cellSize;
+        
+        if ((x + y) % 2 === 0) {
+          this.ctx.fillStyle = '#1a1a1a';
+        } else {
+          this.ctx.fillStyle = '#0f0f0f';
+        }
+        
+        this.ctx.fillRect(px, py, this.cellSize, this.cellSize);
       }
-      
-      this.ctx.fillRect(px, py, this.cellSize, this.cellSize);
     }
-  }
 
-  // Draw grid lines
-  this.ctx.strokeStyle = '#333';
-  this.ctx.lineWidth = 1;
-  
-  for (let i = 0; i <= this.gridSize; i++) {
-    const pos = i * this.cellSize;
+    this.ctx.strokeStyle = '#333';
+    this.ctx.lineWidth = 1;
     
-    this.ctx.beginPath();
-    this.ctx.moveTo(pos, 0);
-    this.ctx.lineTo(pos, this.canvas.height);
-    this.ctx.stroke();
-    
-    this.ctx.beginPath();
-    this.ctx.moveTo(0, pos);
-    this.ctx.lineTo(this.canvas.width, pos);
-    this.ctx.stroke();
-  }
+    for (let i = 0; i <= this.gridSize; i++) {
+      const pos = i * this.cellSize;
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(pos, 0);
+      this.ctx.lineTo(pos, this.canvas.height);
+      this.ctx.stroke();
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, pos);
+      this.ctx.lineTo(this.canvas.width, pos);
+      this.ctx.stroke();
+    }
 
-  // Draw town or wilderness
-  if (this.inTown && this.currentTown) {
-    this.currentTown.drawTown(this.ctx, this.cellSize);
-  } else {
-    // Draw shrines
-    if (this.shrines) {
-      this.shrines.forEach(shrine => {
-        this.drawCell(shrine.x, shrine.y, '#9d4aff');
+    if (this.inTown && this.currentTown) {
+      this.currentTown.drawTown(this.ctx, this.cellSize);
+    } else {
+      if (this.shrines) {
+        this.shrines.forEach(shrine => {
+          this.drawCell(shrine.x, shrine.y, '#9d4aff');
+        });
+      }
+
+      this.traps.forEach(trap => {
+        this.drawCell(trap.x, trap.y, '#ff8800');
+      });
+
+      this.enemies.forEach(enemy => {
+        this.drawCell(enemy.x, enemy.y, '#ff4a4a');
       });
     }
 
-    // Draw traps
-    this.traps.forEach(trap => {
-      this.drawCell(trap.x, trap.y, '#ff8800');
+    this.otherPlayers.forEach(player => {
+      this.drawOtherPlayer(player.x, player.y, player.name);
     });
 
-    // Draw enemies
-    this.enemies.forEach(enemy => {
-      this.drawCell(enemy.x, enemy.y, '#ff4a4a');
-    });
-  }
+    this.drawPlayer(this.player.x, this.player.y);
 
-  // Draw player
-  // Draw player with equipment
-  this.drawPlayer(this.player.x, this.player.y);
-
-
- if (this.hoveredEnemy) {
+    if (this.hoveredEnemy) {
       this.drawEnemyTooltip(this.hoveredEnemy.x, this.hoveredEnemy.y, this.hoveredEnemy.data);
     }
   }
   
-
   drawEnemyTooltip(mouseX, mouseY, monster) {
     const padding = 15;
     const lineHeight = 18;
     const fontSize = 14;
     
-    // Build tooltip content
     const lines = [
       { text: monster.name, color: '#fff', bold: true },
       { text: `Damage: ${monster.damage}`, color: '#ff4a4a' },
@@ -539,7 +560,6 @@ getItemColor(item) {
       { text: 'Resistances:', color: '#888', small: true }
     ];
 
-    // Add non-zero resistances
     Object.keys(monster.resistances).forEach(key => {
       if (monster.resistances[key] > 0) {
         const percent = (monster.resistances[key] * 100).toFixed(0);
@@ -551,13 +571,11 @@ getItemColor(item) {
       }
     });
 
-    // Calculate tooltip dimensions
     this.ctx.font = `${fontSize}px Arial`;
     const maxWidth = Math.max(...lines.map(line => this.ctx.measureText(line.text).width));
     const tooltipWidth = maxWidth + padding * 2;
     const tooltipHeight = lines.length * lineHeight + padding * 2;
 
-    // Position tooltip (avoid going off screen)
     let tooltipX = mouseX + 15;
     let tooltipY = mouseY + 15;
 
@@ -568,16 +586,13 @@ getItemColor(item) {
       tooltipY = mouseY - tooltipHeight - 15;
     }
 
-    // Draw tooltip background
     this.ctx.fillStyle = 'rgba(26, 26, 26, 0.95)';
     this.ctx.fillRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
 
-    // Draw tooltip border
     this.ctx.strokeStyle = '#4a7c3e';
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
 
-    // Draw tooltip text
     let currentY = tooltipY + padding + fontSize;
     lines.forEach(line => {
       const size = line.small ? fontSize - 2 : fontSize;
@@ -595,52 +610,70 @@ getItemColor(item) {
     this.ctx.fillStyle = color;
     this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
   }
+
+  testImageFilter(color, opacity, itemType) {
+    if (!this.imageFilters) this.imageFilters = {};
+    
+    if (itemType) {
+      this.imageFilters[itemType] = { color: color, opacity: opacity };
+    } else {
+      this.imageFilter = { color: color, opacity: opacity };
+    }
+    
+    this.render();
+    console.log(`Filter applied to ${itemType || 'all items'}: ${color} with opacity ${opacity}`);
+  }
+
+  removeImageFilter(itemType) {
+    if (itemType) {
+      if (this.imageFilters) {
+        delete this.imageFilters[itemType];
+      }
+    } else {
+      this.imageFilter = null;
+      this.imageFilters = {};
+    }
+    this.render();
+    console.log(`Filter removed from ${itemType || 'all items'}`);
+  }
 }
 
-
-
-
-
-
-
-
-
+// Initialization code stays the same
 let game;
 let inventory;
 let movement;
 let simulator;
 
-
 const savedCharacter = localStorage.getItem('character');
 if (!savedCharacter) {
-  // No character found, redirect to character creation
   window.location.href = 'index.html';
 } else {
   const character = JSON.parse(savedCharacter);
   console.log('Loaded character:', character);
   
   game = new Game();
-  game.character = character; // Store character in game
+  game.character = character;
 
   inventory = new Inventory(game);
   game.inventory = inventory;
 
-
   movement = new Movement(game);
   simulator = new Simulator(game, movement); 
   
+  const fight = new Fight(game);
+  game.fight = fight;
   
+  const skillSystem = new SkillSystem(game);
+  game.skills = skillSystem;
   
-  const fight = new Fight(game); // Add this line
-  game.fight = fight; // Store reference
-  const skillSystem = new SkillSystem(game); // Add this line
-  game.skills = skillSystem; // Store reference
-  // Create and enter Skargnes
+  const lobby = new Lobby(game);
+  game.lobby = lobby;
+  
   const skargnes = createSkargnes(game);
   skargnes.enter();
-  
-  console.log('Game initialized. Type "game.character" to see your character.');
+  console.log('Initial map seed:', game.mapSeed); // Add this line
+  console.log('Game initialized. Press P to open lobby.');
 }
-  </script>
+</script>
 </body>
 </html>
