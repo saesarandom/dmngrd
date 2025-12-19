@@ -159,13 +159,13 @@ class Game {
     const px = x * this.cellSize;
     const py = y * this.cellSize;
     
-    this.ctx.fillStyle = '#4a9eff';
-    this.ctx.fillRect(px + 6, py + 6, this.cellSize - 12, this.cellSize - 12);
+    // this.ctx.fillStyle = '#4a9eff';
+    // this.ctx.fillRect(px + 6, py + 6, this.cellSize - 12, this.cellSize - 12);
     
-    this.ctx.fillStyle = '#4a9eff';
+    // this.ctx.fillStyle = '#4a9eff';
     this.ctx.font = '10px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);
+    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);s
   }
 
   drawPlayer(x, y) {

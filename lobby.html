@@ -3,327 +3,245 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lobby</title>
+  <title>Game Lobby</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; background-color: #0a0a0a; color: #fff; }
-    #lobbyContainer { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .card { width: 100%; max-width: 700px; background-color: #1a1a1a; border: 2px solid #4a7c3e; border-radius: 8px; padding: 40px; box-shadow: 0 0 40px rgba(74, 124, 62, 0.3); }
-    h1 { color: #4aff4a; margin-bottom: 20px; text-align: center; }
-    .char-info { background-color: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 15px; margin-bottom: 20px; }
-    .char-info div { margin: 8px 0; }
-    .label { color: #888; font-size: 12px; text-transform: uppercase; }
-    .value { color: #4aff4a; font-weight: bold; }
-    .button-group { display: flex; gap: 15px; margin-bottom: 20px; }
-    button { flex: 1; padding: 15px; font-size: 16px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; text-transform: uppercase; transition: all 0.3s; }
-    .btn-primary { background-color: #4a7c3e; color: #fff; }
-    .btn-primary:hover { background-color: #5a8c4e; }
-    .btn-secondary { background-color: #333; color: #888; }
-    .btn-secondary:hover { background-color: #444; }
-    .game-list { margin-top: 20px; max-height: 400px; overflow-y: auto; }
-    .game-item { background-color: #0a0a0a; border: 1px solid #333; border-radius: 4px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-    .game-info { flex: 1; }
-    .game-info .name { color: #4aff4a; font-weight: bold; font-size: 14px; margin-bottom: 5px; }
-    .game-info div { color: #888; font-size: 13px; }
-    .join-btn { background-color: #4a7c3e; color: #fff; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; margin-left: 15px; }
-    .join-btn:hover { background-color: #5a8c4e; }
-    .empty-msg { text-align: center; color: #666; padding: 20px; }
-    .section-title { color: #888; font-size: 12px; text-transform: uppercase; margin-top: 20px; margin-bottom: 10px; }
-    .status { text-align: center; color: #888; font-size: 12px; padding: 10px; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; }
+    body { font-family: Arial; background-color: #0a0a0a; color: #fff; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #4aff4a; margin-bottom: 20px; }
+    .status { padding: 10px; background-color: #1a1a1a; border-left: 3px solid #ff4a4a; margin-bottom: 20px; }
+    .status.connected { border-left-color: #4aff4a; }
+    .games { display: grid; gap: 15px; margin-bottom: 30px; }
+    .game-card { background-color: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 15px; }
+    .game-card h3 { color: #4aff4a; margin-bottom: 10px; }
+    .game-card p { color: #888; font-size: 14px; margin: 5px 0; }
+    button { padding: 10px 20px; background-color: #4a7c3e; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background-color: #5a8c4e; }
+    button:disabled { background-color: #333; cursor: not-allowed; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
     .modal.active { display: flex; }
-    .modal-content { background-color: #1a1a1a; border: 2px solid #4a7c3e; border-radius: 8px; padding: 30px; width: 90%; max-width: 400px; }
-    .modal-content h2 { color: #4aff4a; margin-bottom: 20px; }
+    .modal-content { background-color: #1a1a1a; border: 2px solid #4a7c3e; border-radius: 8px; padding: 30px; width: 400px; }
     .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; color: #888; font-size: 12px; margin-bottom: 5px; text-transform: uppercase; }
+    .form-group label { display: block; color: #888; font-size: 12px; margin-bottom: 5px; }
     .form-group input { width: 100%; padding: 10px; background-color: #0a0a0a; border: 1px solid #333; border-radius: 4px; color: #fff; }
-    .form-group input:focus { outline: none; border-color: #4a7c3e; }
     .form-buttons { display: flex; gap: 10px; }
-    .form-buttons button { padding: 10px; }
-    .pvp-toggle { display: flex; align-items: center; gap: 10px; }
-    .toggle { width: 40px; height: 20px; background-color: #333; border-radius: 10px; cursor: pointer; position: relative; }
-    .toggle.active { background-color: #4a7c3e; }
-    .toggle::after { content: ''; position: absolute; width: 16px; height: 16px; background-color: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left 0.3s; }
-    .toggle.active::after { left: 22px; }
-    .error { color: #ff4a4a; font-size: 12px; margin-top: 5px; }
-    .player-count { background-color: #333; padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+    .form-buttons button { flex: 1; }
   </style>
 </head>
 <body>
-  <div id="lobbyContainer">
-    <div class="card">
-      <h1>Lobby</h1>
-      <div class="status" id="status">Loading games...</div>
-      <div id="charDisplay"></div>
-      
-      <div class="button-group">
-        <button class="btn-primary" id="createGameBtn">+ Create Game</button>
-        <button class="btn-secondary" id="refreshBtn">Refresh Games</button>
-      </div>
+  <div class="container">
+    <h1>Game Lobby</h1>
+    <div id="status" class="status">● Connecting...</div>
 
-      <div class="section-title">Available Games</div>
-      <div id="gameList" class="game-list"></div>
-    </div>
+    <button id="createBtn">+ Create Game</button>
+
+    <h2 style="margin-top: 30px; margin-bottom: 15px;">Available Games</h2>
+    <div id="gamesList" class="games"></div>
   </div>
 
   <!-- Create Game Modal -->
-  <div id="createGameModal" class="modal">
+  <div id="createModal" class="modal">
     <div class="modal-content">
-      <h2>Create Game</h2>
+      <h2 style="color: #4aff4a; margin-bottom: 20px;">Create Game</h2>
       <div class="form-group">
         <label>Game Name</label>
-        <input type="text" id="gameNameInput" placeholder="e.g. Adventure #1" maxlength="30">
+        <input type="text" id="gameName" placeholder="e.g. Adventure #1" maxlength="30">
       </div>
       <div class="form-group">
         <label>Password (Optional)</label>
-        <input type="password" id="passwordInput" placeholder="Leave blank for public game">
+        <input type="password" id="gamePassword" placeholder="Leave blank for public">
       </div>
       <div class="form-group">
-        <label>PVP Enabled</label>
-        <div class="pvp-toggle">
-          <div class="toggle active" id="pvpToggle"></div>
-          <span id="pvpStatus">Enabled</span>
-        </div>
+        <label>
+          <input type="checkbox" id="pvpCheck" checked>
+          Enable PVP
+        </label>
       </div>
-      <div id="createError" class="error"></div>
       <div class="form-buttons">
-        <button class="btn-secondary" style="flex: 0.5;" onclick="closeCreateModal()">Cancel</button>
-        <button class="btn-primary" onclick="submitCreateGame()">Create</button>
+        <button onclick="closeModal()">Cancel</button>
+        <button onclick="submitCreate()">Create</button>
       </div>
     </div>
   </div>
 
-  <!-- Join Game Modal -->
-  <div id="joinGameModal" class="modal">
-    <div class="modal-content">
-      <h2>Join Game</h2>
-      <div id="joinGameName" style="color: #4aff4a; margin-bottom: 15px;"></div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="joinPasswordInput" placeholder="Enter password if required">
-      </div>
-      <div id="joinError" class="error"></div>
-      <div class="form-buttons">
-        <button class="btn-secondary" style="flex: 0.5;" onclick="closeJoinModal()">Cancel</button>
-        <button class="btn-primary" onclick="submitJoinGame()">Join</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
   <script>
-    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-    const host = window.location.host;
-    const socketUrl = `${protocol}://${host}`;
-    const socket = io(socketUrl);
-
-    class Lobby {
-      constructor() {
-        const savedCharacter = localStorage.getItem('character');
-        if (!savedCharacter) {
-          window.location.href = 'index.html';
-          return;
-        }
-        
-        this.character = JSON.parse(savedCharacter);
-        this.games = [];
-        this.pvpEnabled = true;
-        this.selectedGameToJoin = null;
-        
-        this.setupSocket();
-        this.loadGames();
-        this.render();
-        
-        document.getElementById('createGameBtn').addEventListener('click', () => openCreateModal());
-        document.getElementById('refreshBtn').addEventListener('click', () => this.loadGames());
-        document.getElementById('pvpToggle').addEventListener('click', () => this.togglePVP());
-      }
-
-      setupSocket() {
-        socket.on('connect', () => {
-          console.log('Connected to server');
-          this.updateStatus('Connected');
-        });
-
-        socket.on('disconnect', () => {
-          this.updateStatus('Disconnected from server');
-        });
-
-        socket.on('game_created', (data) => {
-          console.log('Game created:', data);
-          localStorage.setItem('currentGame', JSON.stringify({
-            gameName: data.gameName,
-            mapSeed: data.mapSeed,
-            isCreator: true
-          }));
-          window.location.href = 'game.html';
-        });
-
-        socket.on('game_joined', (data) => {
-          console.log('Game joined:', data);
-          localStorage.setItem('currentGame', JSON.stringify({
-            gameName: data.gameName,
-            mapSeed: data.mapSeed,
-            isCreator: false,
-            players: data.players
-          }));
-          window.location.href = 'game.html';
-        });
-
-        socket.on('error', (data) => {
-          alert('Error: ' + data.message);
-        });
-      }
-
-      updateStatus(msg) {
-        document.getElementById('status').textContent = msg;
-      }
-
-      togglePVP() {
-        this.pvpEnabled = !this.pvpEnabled;
-        const toggle = document.getElementById('pvpToggle');
-        const status = document.getElementById('pvpStatus');
-        toggle.classList.toggle('active');
-        status.textContent = this.pvpEnabled ? 'Enabled' : 'Disabled';
-      }
-
-      async loadGames() {
-        try {
-          const response = await fetch('/games');
-          this.games = await response.json();
-          this.renderGameList();
-          this.updateStatus(`${this.games.length} game(s) available`);
-        } catch (error) {
-          console.error('Failed to load games:', error);
-          this.updateStatus('Failed to load games');
-        }
-      }
-
-      renderCharInfo() {
-        const charDisplay = document.getElementById('charDisplay');
-        charDisplay.innerHTML = `
-          <div class="char-info">
-            <div><span class="label">Character:</span> <span class="value">${this.character.name}</span></div>
-            <div><span class="label">Class:</span> <span class="value">${this.character.class}</span> | <span class="label">Race:</span> <span class="value">${this.character.race}</span></div>
-            <div><span class="label">Level:</span> <span class="value">${this.character.level}</span></div>
-          </div>
-        `;
-      }
-
-      renderGameList() {
-        const gameList = document.getElementById('gameList');
-        
-        if (this.games.length === 0) {
-          gameList.innerHTML = '<div class="empty-msg">No games available. Create one to start!</div>';
-          return;
-        }
-        
-        gameList.innerHTML = this.games.map(game => `
-          <div class="game-item">
-            <div class="game-info">
-              <div class="name">${game.name}</div>
-              <div>
-                <span class="player-count">${game.player_count} player(s)</span>
-                ${game.has_password ? '<span style="color: #ffff4a; margin-left: 10px;">🔒 Password Protected</span>' : ''}
-                ${!game.pvp_enabled ? '<span style="color: #4a9eff; margin-left: 10px;">PVE Mode</span>' : '<span style="color: #ff4a4a; margin-left: 10px;">PVP Enabled</span>'}
-              </div>
-            </div>
-            <button class="join-btn" data-game-id="${game.id}" data-game-name="${game.name}" onclick="openJoinModal('${game.id}', '${game.name}', ${game.has_password})">Join</button>
-          </div>
-        `).join('');
-      }
-
-      render() {
-        this.renderCharInfo();
-        this.renderGameList();
-      }
+    const character = JSON.parse(localStorage.getItem('character'));
+    if (!character) {
+      window.location.href = '/';
+      throw new Error('No character');
     }
 
-    let lobby = new Lobby();
+    // Connect to server
+    const socket = io('http://localhost:3000', {
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: 5
+    });
 
-    function openCreateModal() {
-      document.getElementById('createGameModal').classList.add('active');
-      document.getElementById('gameNameInput').focus();
+    let games = [];
+
+    socket.on('connect', () => {
+      console.log('✓ Connected to server');
+      updateStatus('Connected', true);
+      loadGames();
+    });
+
+    socket.on('disconnect', () => {
+      console.log('✗ Disconnected');
+      updateStatus('Disconnected', false);
+    });
+
+    socket.on('games_updated', (updatedGames) => {
+      console.log('Games updated:', updatedGames.length);
+      games = updatedGames;
+      renderGames();
+    });
+
+    socket.on('game_created', (game) => {
+      console.log('Game created:', game.name);
+      const gameInfo = {
+        id: game.id,
+        gameName: game.name,
+        mapSeed: game.map_seed,
+        isCreator: true,
+        password: game.password,
+        players: game.players
+      };
+      localStorage.setItem('currentGame', JSON.stringify(gameInfo));
+      alert('Game created! Redirecting...');
+      window.location.href = '/game.html';
+    });
+
+    socket.on('game_joined', (game) => {
+      console.log('Game joined:', game.name);
+      const gameInfo = {
+        id: game.id,
+        gameName: game.name,
+        mapSeed: game.map_seed,
+        isCreator: false,
+        players: game.players
+      };
+      localStorage.setItem('currentGame', JSON.stringify(gameInfo));
+      alert('Joined game! Redirecting...');
+      window.location.href = '/game.html';
+    });
+
+    socket.on('error', (err) => {
+      alert('Error: ' + err.message);
+    });
+
+    function updateStatus(msg, connected) {
+      const status = document.getElementById('status');
+      status.textContent = (connected ? '●' : '●') + ' ' + msg;
+      status.classList.toggle('connected', connected);
     }
 
-    function closeCreateModal() {
-      document.getElementById('createGameModal').classList.remove('active');
-      document.getElementById('createError').textContent = '';
+    function loadGames() {
+      fetch('http://localhost:3000/games')
+        .then(res => res.json())
+        .then(data => {
+          games = data || [];
+          console.log('Games loaded:', games.length);
+          renderGames();
+        })
+        .catch(err => {
+          console.error('Failed to load games:', err);
+          games = [];
+          renderGames();
+        });
     }
 
-    function submitCreateGame() {
-      const gameName = document.getElementById('gameNameInput').value.trim();
-      const password = document.getElementById('passwordInput').value || null;
-      const errorDiv = document.getElementById('createError');
-
-      if (!gameName) {
-        errorDiv.textContent = 'Game name is required';
+    function renderGames() {
+      const list = document.getElementById('gamesList');
+      if (!games || games.length === 0) {
+        list.innerHTML = '<p style="color: #666;">No games available. Create one!</p>';
         return;
       }
 
-      if (gameName.length > 30) {
-        errorDiv.textContent = 'Game name too long (max 30 chars)';
+      list.innerHTML = games.map(game => `
+        <div class="game-card">
+          <h3>${game.name}</h3>
+          <p>Creator: ${game.creator_name}</p>
+          <p>Seed: ${game.map_seed}</p>
+          ${game.password ? '<p>🔒 Password Protected</p>' : ''}
+          ${!game.pvp_enabled ? '<p>⚔️ PVE Mode</p>' : '<p>⚔️ PVP Enabled</p>'}
+          <button onclick="joinGame('${game.id}', ${game.password ? 'true' : 'false'})">Join Game</button>
+        </div>
+      `).join('');
+    }
+
+    function openModal() {
+      document.getElementById('createModal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('createModal').classList.remove('active');
+    }
+
+    function submitCreate() {
+      const name = document.getElementById('gameName').value.trim();
+      const password = document.getElementById('gamePassword').value.trim();
+      const pvp = document.getElementById('pvpCheck').checked;
+
+      if (!name) {
+        alert('Enter game name');
         return;
       }
 
       const mapSeed = Date.now().toString();
 
       socket.emit('create_game', {
-        gameName: gameName,
-        password: password,
-        pvpEnabled: lobby.pvpEnabled,
+        gameName: name,
+        password: password || null,
+        pvpEnabled: pvp,
         mapSeed: mapSeed,
         player: {
-          name: lobby.character.name,
-          class: lobby.character.class,
-          race: lobby.character.race,
-          level: lobby.character.level,
+          name: character.name,
+          class: character.class,
+          race: character.race,
+          level: character.level,
           x: 6,
           y: 1
         }
       });
 
-      closeCreateModal();
+      closeModal();
+      document.getElementById('gameName').value = '';
+      document.getElementById('gamePassword').value = '';
     }
 
-    function openJoinModal(gameId, gameName, hasPassword) {
-      lobby.selectedGameToJoin = { id: gameId, name: gameName };
-      document.getElementById('joinGameName').textContent = gameName;
-      const passwordInput = document.getElementById('joinPasswordInput');
-      passwordInput.disabled = !hasPassword;
-      if (!hasPassword) passwordInput.value = '';
-      document.getElementById('joinGameModal').classList.add('active');
-      passwordInput.focus();
-    }
+    function joinGame(gameId, hasPassword) {
+      const numGameId = parseInt(gameId);
+      const game = games.find(g => parseInt(g.id) === numGameId);
+      
+      if (!game) {
+        console.error('Game not found:', gameId);
+        return;
+      }
 
-    function closeJoinModal() {
-      document.getElementById('joinGameModal').classList.remove('active');
-      document.getElementById('joinError').textContent = '';
-      document.getElementById('joinPasswordInput').value = '';
-      lobby.selectedGameToJoin = null;
-    }
-
-    function submitJoinGame() {
-      if (!lobby.selectedGameToJoin) return;
-
-      const password = document.getElementById('joinPasswordInput').value || null;
-      const errorDiv = document.getElementById('joinError');
+      let password = null;
+      if (hasPassword) {
+        password = prompt('Enter game password:');
+        if (password === null) return;
+      }
 
       socket.emit('join_game', {
-        gameName: lobby.selectedGameToJoin.name,
+        gameId: numGameId,
         password: password,
         player: {
-          name: lobby.character.name,
-          class: lobby.character.class,
-          race: lobby.character.race,
-          level: lobby.character.level,
+          name: character.name,
+          class: character.class,
+          race: character.race,
+          level: character.level,
           x: 6,
           y: 1
         }
       });
-
-      closeJoinModal();
     }
+
+    document.getElementById('createBtn').addEventListener('click', openModal);
   </script>
 </body>
 </html>
