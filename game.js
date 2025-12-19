@@ -1,0 +1,363 @@
+class Game {
+  constructor(gameSeed) {
+    this.canvas = document.getElementById('gameCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.gridSize = 30;
+    this.cellSize = 32;
+    this.resolutionMenu = document.getElementById('resolutionMenu');
+    this.menuOpen = false;
+    this.otherPlayers = [];
+    this.mapSeed = gameSeed;
+    
+    this.enemies = [];
+    this.traps = [];
+    this.shrines = [];
+    this.player = { x: 0, y: 0 };
+    this.message = '';
+    this.hoveredEnemy = null;
+    this.inTown = false;
+    this.currentTown = null;
+    
+    this.setMessage('Initializing game...');
+    this.setupCanvas();
+    this.setupEventListeners();
+    this.setupMouseTracking();
+  }
+
+  setupCanvas() {
+    const totalSize = this.gridSize * this.cellSize;
+    this.canvas.width = totalSize;
+    this.canvas.height = totalSize;
+  }
+
+  setupEventListeners() {
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'r' || e.key === 'R') {
+        this.toggleResolutionMenu();
+      }
+      if (e.key === 'Escape' && this.menuOpen) {
+        this.closeResolutionMenu();
+      }
+    });
+
+    const buttons = document.querySelectorAll('.resolution-btn');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const newSize = parseInt(btn.dataset.res);
+        this.changeResolution(newSize);
+        this.updateActiveButton(newSize);
+      });
+    });
+  }
+
+  setupMouseTracking() {
+    this.canvas.addEventListener('mousemove', (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      const gridX = Math.floor(mouseX / this.cellSize);
+      const gridY = Math.floor(mouseY / this.cellSize);
+      
+      const enemy = this.enemies.find(e => e.x === gridX && e.y === gridY);
+      
+      if (enemy) {
+        if (!enemy.monsterData) {
+          enemy.monsterData = getRandomMonster();
+        }
+        this.hoveredEnemy = {
+          x: mouseX,
+          y: mouseY,
+          data: enemy.monsterData
+        };
+      } else {
+        this.hoveredEnemy = null;
+      }
+      
+      this.render();
+    });
+
+    this.canvas.addEventListener('mouseleave', () => {
+      this.hoveredEnemy = null;
+      this.render();
+    });
+  }
+
+  toggleResolutionMenu() {
+    this.menuOpen = !this.menuOpen;
+    this.resolutionMenu.style.display = this.menuOpen ? 'block' : 'none';
+    if (this.menuOpen) {
+      this.updateActiveButton(this.cellSize);
+    }
+  }
+
+  closeResolutionMenu() {
+    this.menuOpen = false;
+    this.resolutionMenu.style.display = 'none';
+  }
+
+  updateActiveButton(size) {
+    const buttons = document.querySelectorAll('.resolution-btn');
+    buttons.forEach(btn => {
+      if (parseInt(btn.dataset.res) === size) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  changeResolution(newSize) {
+    this.cellSize = newSize;
+    this.setupCanvas();
+    this.render();
+    this.closeResolutionMenu();
+  }
+
+  setMessage(text) {
+    this.message = text;
+    const messageBox = document.getElementById('messageBox');
+    messageBox.textContent = text;
+    messageBox.classList.add('show');
+  }
+
+  checkTrap(x, y) {
+    const trapIndex = this.traps.findIndex(trap => trap.x === x && trap.y === y);
+    if (trapIndex !== -1) {
+      this.traps.splice(trapIndex, 1);
+      this.setMessage('You activated a trap!');
+      this.render();
+      return true;
+    }
+    return false;
+  }
+
+  checkShrine(x, y) {
+    const shrineIndex = this.shrines.findIndex(shrine => shrine.x === x && shrine.y === y);
+    if (shrineIndex !== -1) {
+      this.shrines.splice(shrineIndex, 1);
+      this.setMessage('You activated a shrine!');
+      this.render();
+      return true;
+    }
+    return false;
+  }
+
+  updateOtherPlayers(players) {
+    const currentLocation = this.inTown && this.currentTown 
+      ? this.currentTown.name 
+      : 'wilderness';
+    
+    this.otherPlayers = players.filter(p => 
+      p.name !== this.character.name && 
+      p.location === currentLocation
+    );
+    this.render();
+  }
+
+  drawOtherPlayer(x, y, playerName) {
+    const px = x * this.cellSize;
+    const py = y * this.cellSize;
+    
+    this.ctx.fillStyle = '#4a9eff';
+    this.ctx.fillRect(px + 6, py + 6, this.cellSize - 12, this.cellSize - 12);
+    
+    this.ctx.fillStyle = '#4a9eff';
+    this.ctx.font = '10px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);
+  }
+
+  drawPlayer(x, y) {
+    const px = x * this.cellSize;
+    const py = y * this.cellSize;
+    const inventory = this.inventory;
+    
+    const centerX = px + this.cellSize / 2;
+    const centerY = py + this.cellSize / 2;
+    const itemSize = this.cellSize / 2;
+    
+    this.ctx.fillStyle = 'rgba(74, 255, 74, 0.1)';
+    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+    
+    if (inventory.equipped.helm) {
+      this.drawItemIcon(inventory.equipped.helm, centerX - itemSize/2, py + 2, itemSize, itemSize);
+    }
+    
+    if (inventory.equipped.weapon) {
+      this.drawItemIcon(inventory.equipped.weapon, px - 4, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (inventory.equipped.armor) {
+      this.drawItemIcon(inventory.equipped.armor, centerX - itemSize/2, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (inventory.equipped.shield) {
+      this.drawItemIcon(inventory.equipped.shield, px + this.cellSize - itemSize + 4, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (!inventory.equipped.weapon && !inventory.equipped.armor && 
+        !inventory.equipped.helm && !inventory.equipped.shield) {
+      this.ctx.fillStyle = '#4aff4a';
+      this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+    }
+  }
+
+  drawItemIcon(item, x, y, width, height) {
+    if (item.image) {
+      const img = new Image();
+      img.src = item.image;
+      
+      if (img.complete) {
+        this.ctx.drawImage(img, x, y, width, height);
+      } else {
+        img.onload = () => this.render();
+        img.onerror = () => {
+          this.ctx.fillStyle = this.getItemColor(item);
+          this.ctx.fillRect(x, y, width, height);
+        };
+      }
+    } else {
+      this.ctx.fillStyle = this.getItemColor(item);
+      this.ctx.fillRect(x, y, width, height);
+    }
+  }
+
+  getItemColor(item) {
+    switch(item.type) {
+      case 'weapon': return '#ff4a4a';
+      case 'armor': return '#4a9eff';
+      case 'helm': return '#ffff4a';
+      case 'shield': return '#ff8800';
+      default: return '#888888';
+    }
+  }
+
+  render() {
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    for (let y = 0; y < this.gridSize; y++) {
+      for (let x = 0; x < this.gridSize; x++) {
+        const px = x * this.cellSize;
+        const py = y * this.cellSize;
+        
+        if ((x + y) % 2 === 0) {
+          this.ctx.fillStyle = '#1a1a1a';
+        } else {
+          this.ctx.fillStyle = '#0f0f0f';
+        }
+        
+        this.ctx.fillRect(px, py, this.cellSize, this.cellSize);
+      }
+    }
+
+    this.ctx.strokeStyle = '#333';
+    this.ctx.lineWidth = 1;
+    
+    for (let i = 0; i <= this.gridSize; i++) {
+      const pos = i * this.cellSize;
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(pos, 0);
+      this.ctx.lineTo(pos, this.canvas.height);
+      this.ctx.stroke();
+      
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, pos);
+      this.ctx.lineTo(this.canvas.width, pos);
+      this.ctx.stroke();
+    }
+
+    if (this.inTown && this.currentTown) {
+      this.currentTown.drawTown(this.ctx, this.cellSize);
+    } else {
+      if (this.shrines) {
+        this.shrines.forEach(shrine => {
+          this.drawCell(shrine.x, shrine.y, '#9d4aff');
+        });
+      }
+
+      this.traps.forEach(trap => {
+        this.drawCell(trap.x, trap.y, '#ff8800');
+      });
+
+      this.enemies.forEach(enemy => {
+        this.drawCell(enemy.x, enemy.y, '#ff4a4a');
+      });
+    }
+
+    this.otherPlayers.forEach(player => {
+      this.drawOtherPlayer(player.x, player.y, player.name);
+    });
+
+    this.drawPlayer(this.player.x, this.player.y);
+
+    if (this.hoveredEnemy) {
+      this.drawEnemyTooltip(this.hoveredEnemy.x, this.hoveredEnemy.y, this.hoveredEnemy.data);
+    }
+  }
+  
+  drawEnemyTooltip(mouseX, mouseY, monster) {
+    const padding = 15;
+    const lineHeight = 18;
+    const fontSize = 14;
+    
+    const lines = [
+      { text: monster.name, color: '#fff', bold: true },
+      { text: `Damage: ${monster.damage}`, color: '#ff4a4a' },
+      { text: `Defense: ${monster.defense}`, color: '#4a9eff' },
+      { text: `HP: ${monster.hp}`, color: '#4aff4a' },
+      { text: 'Resistances:', color: '#888', small: true }
+    ];
+
+    Object.keys(monster.resistances).forEach(key => {
+      if (monster.resistances[key] > 0) {
+        const percent = (monster.resistances[key] * 100).toFixed(0);
+        lines.push({ 
+          text: `  ${key}: ${percent}%`, 
+          color: '#ffff4a',
+          small: true
+        });
+      }
+    });
+
+    this.ctx.font = `${fontSize}px Arial`;
+    const maxWidth = Math.max(...lines.map(line => this.ctx.measureText(line.text).width));
+    const tooltipWidth = maxWidth + padding * 2;
+    const tooltipHeight = lines.length * lineHeight + padding * 2;
+
+    let tooltipX = mouseX + 15;
+    let tooltipY = mouseY + 15;
+
+    if (tooltipX + tooltipWidth > this.canvas.width) {
+      tooltipX = mouseX - tooltipWidth - 15;
+    }
+    if (tooltipY + tooltipHeight > this.canvas.height) {
+      tooltipY = mouseY - tooltipHeight - 15;
+    }
+
+    this.ctx.fillStyle = 'rgba(26, 26, 26, 0.95)';
+    this.ctx.fillRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
+
+    this.ctx.strokeStyle = '#4a7c3e';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
+
+    let currentY = tooltipY + padding + fontSize;
+    lines.forEach(line => {
+      const size = line.small ? fontSize - 2 : fontSize;
+      this.ctx.font = `${line.bold ? 'bold' : 'normal'} ${size}px Arial`;
+      this.ctx.fillStyle = line.color;
+      this.ctx.fillText(line.text, tooltipX + padding, currentY);
+      currentY += lineHeight;
+    });
+  }
+  
+  drawCell(x, y, color) {
+    const px = x * this.cellSize;
+    const py = y * this.cellSize;
+    
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+  }
+}

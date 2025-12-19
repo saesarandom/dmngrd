@@ -16,6 +16,7 @@ class Town {
     
     this.game.enemies = [];
     this.game.traps = [];
+    this.game.shrines = [];
     
     this.game.player = { ...this.playerSpawn };
     
@@ -23,14 +24,6 @@ class Town {
     this.game.currentTown = this;
     this.game.render();
     this.game.setMessage(`Welcome to ${this.name}! Press E near NPCs to interact.`);
-    
-    // Notify server of location change
-    if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
-      this.game.lobby.socket.emit('update_location', {
-        gameName: this.game.lobby.gameName,
-        location: this.name
-      });
-    }
   }
 
   exit() {
@@ -40,36 +33,17 @@ class Town {
     this.game.lastTown = this.name;
     this.game.currentTown = null;
     
-    console.log('=== LEAVING TOWN ===');
-    console.log('Current mapSeed:', this.game.mapSeed);
-    
-    // ALWAYS use existing seed for multiplayer consistency
-    if (this.game.mapSeed) {
-      console.log('Generating with existing seed:', this.game.mapSeed);
-      this.game.generateMap(this.game.mapSeed);
-    } else {
-      console.log('No seed found, generating new one');
-      this.game.generateMap();
-    }
-    
-    console.log('After generation, seed is:', this.game.mapSeed);
-    console.log('Enemies count:', this.game.enemies.length);
-    console.log('Traps count:', this.game.traps.length);
+    const mapData = initializeGameWithSeed(this.game.mapSeed);
+    this.game.enemies = mapData.enemies;
+    this.game.traps = mapData.traps;
+    this.game.shrines = mapData.shrines;
+    this.game.player = mapData.playerSpawn;
     
     this.game.render();
-    this.game.setMessage(`You left the ${this.name} and entered the wilderness.`);
-    
-    // Notify server of location change
-    if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
-      this.game.lobby.socket.emit('update_location', {
-        gameName: this.game.lobby.gameName,
-        location: 'wilderness'
-      });
-    }
+    this.game.setMessage('You entered the wilderness!');
   }
 
   drawTown(ctx, cellSize) {
-    // Draw buildings
     this.buildings.forEach(building => {
       for (let y = building.y; y < building.y + building.height; y++) {
         for (let x = building.x; x < building.x + building.width; x++) {
@@ -81,7 +55,6 @@ class Town {
       }
     });
 
-    // Draw NPCs
     this.npcs.forEach(npc => {
       const px = npc.x * cellSize;
       const py = npc.y * cellSize;
@@ -89,7 +62,6 @@ class Town {
       ctx.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
     });
 
-    // Draw exits
     this.exits.forEach(exit => {
       const px = exit.x * cellSize;
       const py = exit.y * cellSize;
@@ -120,42 +92,14 @@ class Town {
   }
 }
 
-// Town definitions
-const createSkargnes = (game) => {
+const createSkargnes = (game, seed) => {
   const town = new Town(game, 'Skargnes', 14, 17);
+  const townData = initializeTownWithSeed('Skargnes', town.width, town.height, seed);
   
-  town.playerSpawn = { x: 6, y: 1 };
-  
-  town.buildings = [
-    { x: 2, y: 2, width: 3, height: 3 },
-    { x: 9, y: 9, width: 3, height: 3 }
-  ];
-  
-  town.npcs = [
-    { x: 3, y: 3, name: 'Merchant' },
-    { x: 10, y: 10, name: 'Blacksmith' }
-  ];
-  
-  const edge = Math.floor(Math.random() * 4);
-  let exitX, exitY;
-
-  if (edge === 0) {
-    exitX = Math.floor(Math.random() * town.width);
-    exitY = 0;
-  } else if (edge === 1) {
-    exitX = town.width - 1;
-    exitY = Math.floor(Math.random() * town.height);
-  } else if (edge === 2) {
-    exitX = Math.floor(Math.random() * town.width);
-    exitY = town.height - 1;
-  } else {
-    exitX = 0;
-    exitY = Math.floor(Math.random() * town.height);
-  }
-
-  town.exits = [
-    { x: exitX, y: exitY, direction: 'exit' }
-  ];
+  town.playerSpawn = townData.playerSpawn;
+  town.buildings = townData.buildings;
+  town.npcs = townData.npcs;
+  town.exits = townData.exits;
   
   return town;
 };

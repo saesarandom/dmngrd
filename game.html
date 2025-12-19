@@ -5,114 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #0a0a0a;
-      color: #fff;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      overflow: hidden;
-    }
-
-    #gameCanvas {
-      border: 2px solid #333;
-      box-shadow: 0 0 40px rgba(33, 33, 62, 0.3);
-      image-rendering: pixelated;
-      image-rendering: crisp-edges;
-    }
-
-    #resolutionMenu {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background-color: #1a1a1a;
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 30px;
-      box-shadow: 0 0 40px rgba(78, 62, 124, 0.5);
-      display: none;
-      z-index: 1000;
-    }
-
-    #resolutionMenu h2 {
-      color: #333;
-      text-align: center;
-      margin-bottom: 20px;
-      font-size: 24px;
-      text-shadow: 0 0 10px rgba(7, 8, 7, 0.5);
-    }
-
-    .resolution-btn {
-      width: 100%;
-      padding: 15px;
-      margin-bottom: 10px;
-      background-color: #0a0a0a;
-      border: 2px solid #333;
-      border-radius: 4px;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .resolution-btn:hover {
-      background-color: #222;
-      border-color: #444;
-    }
-
-    .resolution-btn.active {
-      background-color: #333;
-      border-color: #333;
-    }
-
-    #info {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background-color: rgba(26, 26, 26, 0.9);
-      border: 1px solid #333;
-      border-radius: 4px;
-      padding: 10px 15px;
-      font-size: 14px;
-      color: #888;
-    }
-
-    #messageBox {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 600px;
-  min-height: 120px;
-  background-color: rgba(26, 26, 26, 0.95);
-  border: 2px solid #333;
-  border-radius: 4px;
-  padding: 20px;
-  color: #fff;
-  font-size: 16px;
-  box-shadow: 0 0 20px rgba(74, 124, 62, 0.3);
-  display: none;
-}
-
-#messageBox.show {
-  display: block;
-}
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; background-color: #0a0a0a; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+    #gameCanvas { border: 2px solid #333; box-shadow: 0 0 40px rgba(33, 33, 62, 0.3); image-rendering: pixelated; }
+    #resolutionMenu { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 30px; display: none; z-index: 1000; }
+    #resolutionMenu h2 { color: #333; text-align: center; margin-bottom: 20px; }
+    .resolution-btn { width: 100%; padding: 15px; margin-bottom: 10px; background-color: #0a0a0a; border: 2px solid #333; border-radius: 4px; color: #fff; font-size: 16px; cursor: pointer; }
+    .resolution-btn:hover { background-color: #222; border-color: #444; }
+    .resolution-btn.active { background-color: #333; }
+    #info { position: fixed; top: 20px; right: 20px; background-color: rgba(26, 26, 26, 0.9); border: 1px solid #333; border-radius: 4px; padding: 10px 15px; font-size: 14px; color: #888; }
+    #messageBox { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 600px; min-height: 120px; background-color: rgba(26, 26, 26, 0.95); border: 2px solid #333; border-radius: 4px; padding: 20px; color: #fff; font-size: 16px; display: none; }
+    #messageBox.show { display: block; }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
   <div id="messageBox"></div>
-  
   <div id="resolutionMenu">
     <h2>Select Resolution</h2>
     <button class="resolution-btn" data-res="16">16x16 px</button>
@@ -122,558 +30,88 @@
     <button class="resolution-btn" data-res="96">96x96 px</button>
     <button class="resolution-btn" data-res="128">128x128 px</button>
   </div>
-
   <div id="info">Press R to change resolution</div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
-<script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+  <script src="seedGen.js"></script>
   <script src="movement.js"></script>
   <script src="town.js"></script>
   <script src="simulate.js"></script>
   <script src="items.js"></script>
-<script src="inventory.js"></script>
-<script src="monsters.js"></script>
-<script src="fight.js"></script>
-<script src="skills.js"></script>
-<script src="lobby.js"></script>
-<script src="game.js"></script>
+  <script src="inventory.js"></script>
+  <script src="monsters.js"></script>
+  <script src="fight.js"></script>
+  <script src="skills.js"></script>
+  <script src="game.js"></script>
 
   <script>
-   
-class Game {
-  constructor() {
-    this.canvas = document.getElementById('gameCanvas');
-    this.ctx = this.canvas.getContext('2d');
-    this.gridSize = 30;
-    this.cellSize = 32;
-    this.resolutionMenu = document.getElementById('resolutionMenu');
-    this.menuOpen = false;
-    this.otherPlayers = [];
-    this.mapSeed = null;
-    
-    this.enemies = [];
-    this.traps = [];
-    this.shrines = [];
-    this.player = { x: 0, y: 0 };
-    this.message = '';
-    this.hoveredEnemy = null;
-    this.setMessage('Welcome to the game!');
+    const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
+    const host = window.location.host;
+    const socket = io(`${protocol}://${host}`);
 
-    
-    this.setupCanvas();
-    this.setupEventListeners();
-    this.setupMouseTracking();
-  }
+    const savedCharacter = localStorage.getItem('character');
+    const savedGame = localStorage.getItem('currentGame');
 
-  generateMap(seed = null) {
-  // Save current random state
-  const savedRandom = Math.random;
-  
-  if (seed) {
-    this.mapSeed = seed;
-    Math.seedrandom(seed);
-  } else {
-    this.mapSeed = Date.now();
-    Math.seedrandom(this.mapSeed);
-  }
-
-  // Generate enemies
-  this.enemies = [];
-  for (let y = 0; y < this.gridSize; y++) {
-    for (let x = 0; x < this.gridSize; x++) {
-      if (Math.random() < 1/128) {
-        this.enemies.push({ x, y });
-      }
-    }
-  }
-
-  // Find empty cells
-  const emptyCells = [];
-  for (let y = 0; y < this.gridSize; y++) {
-    for (let x = 0; x < this.gridSize; x++) {
-      const isOccupied = this.enemies.some(e => e.x === x && e.y === y);
-      if (!isOccupied) {
-        emptyCells.push({ x, y });
-      }
-    }
-  }
-
-  // Generate traps
-  this.traps = [];
-  emptyCells.forEach(cell => {
-    if (Math.random() < 1/128) {
-      this.traps.push({ x: cell.x, y: cell.y });
-    }
-  });
-
-  // Generate shrines
-  this.shrines = [];
-  emptyCells.forEach(cell => {
-    const hasTrap = this.traps.some(trap => trap.x === cell.x && trap.y === cell.y);
-    if (!hasTrap && Math.random() < 1/512) {
-      this.shrines.push({ x: cell.x, y: cell.y });
-    }
-  });
-
-  // Safe spawn - DON'T use random for player spawn in multiplayer
-  const safeCells = emptyCells.filter(cell => 
-    !this.traps.some(trap => trap.x === cell.x && trap.y === cell.y) &&
-    !this.shrines.some(shrine => shrine.x === cell.x && shrine.y === cell.y)
-  );
-
-  // Use first safe cell or center for multiplayer consistency
-  if (safeCells.length > 0) {
-    // Always use same spawn point for all players
-    this.player = safeCells[0]; // Don't randomize in multiplayer
-  }
-
-  // Reset random - IMPORTANT!
-  Math.seedrandom();
-  Math.random = savedRandom;
-}
-  updateOtherPlayers(players) {
-    // Get current location
-    const currentLocation = this.inTown && this.currentTown 
-      ? this.currentTown.name 
-      : 'wilderness';
-    
-    // Filter by location AND exclude self
-    this.otherPlayers = players.filter(p => 
-      p.name !== this.character.name && 
-      p.location === currentLocation
-    );
-    this.render();
-  }
-
-  drawOtherPlayer(x, y, playerName) {
-    const px = x * this.cellSize;
-    const py = y * this.cellSize;
-    
-    this.ctx.fillStyle = '#4a9eff';
-    this.ctx.fillRect(px + 6, py + 6, this.cellSize - 12, this.cellSize - 12);
-    
-    this.ctx.fillStyle = '#4a9eff';
-    this.ctx.font = '10px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);
-  }
-
-  checkShrine(x, y) {
-  const shrineIndex = this.shrines.findIndex(shrine => shrine.x === x && shrine.y === y);
-  if (shrineIndex !== -1) {
-    this.shrines.splice(shrineIndex, 1);
-    this.setMessage('You activated a shrine!');
-    this.render();
-    
-    // Broadcast to other players
-    if (this.lobby && this.lobby.socket && this.lobby.gameName) {
-      this.lobby.socket.emit('map_event', {
-        gameName: this.lobby.gameName,
-        type: 'shrine_activated',
-        x: x,
-        y: y
-      });
-    }
-    
-    return true;
-  }
-  return false;
-}
-
-  setupCanvas() {
-    const totalSize = this.gridSize * this.cellSize;
-    this.canvas.width = totalSize;
-    this.canvas.height = totalSize;
-  }
-
-  setupEventListeners() {
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'r' || e.key === 'R') {
-        this.toggleResolutionMenu();
-      }
-      if (e.key === 'Escape' && this.menuOpen) {
-        this.closeResolutionMenu();
-      }
-    });
-
-    const buttons = document.querySelectorAll('.resolution-btn');
-    buttons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const newSize = parseInt(btn.dataset.res);
-        this.changeResolution(newSize);
-        this.updateActiveButton(newSize);
-      });
-    });
-  }
-
-  toggleResolutionMenu() {
-    this.menuOpen = !this.menuOpen;
-    this.resolutionMenu.style.display = this.menuOpen ? 'block' : 'none';
-    if (this.menuOpen) {
-      this.updateActiveButton(this.cellSize);
-    }
-  }
-
-  closeResolutionMenu() {
-    this.menuOpen = false;
-    this.resolutionMenu.style.display = 'none';
-  }
-
-  updateActiveButton(size) {
-    const buttons = document.querySelectorAll('.resolution-btn');
-    buttons.forEach(btn => {
-      if (parseInt(btn.dataset.res) === size) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
-    });
-  }
-
-  changeResolution(newSize) {
-    this.cellSize = newSize;
-    this.setupCanvas();
-    this.render();
-    this.closeResolutionMenu();
-  }
-
-  setMessage(text) {
-    this.message = text;
-    const messageBox = document.getElementById('messageBox');
-    messageBox.textContent = text;
-    messageBox.classList.add('show');
-  }
-
- checkTrap(x, y) {
-  const trapIndex = this.traps.findIndex(trap => trap.x === x && trap.y === y);
-  if (trapIndex !== -1) {
-    this.traps.splice(trapIndex, 1);
-    this.setMessage('You activated a trap!');
-    
-    // Broadcast to other players
-    if (this.lobby && this.lobby.socket && this.lobby.gameName) {
-      this.lobby.socket.emit('map_event', {
-        gameName: this.lobby.gameName,
-        type: 'trap_activated',
-        x: x,
-        y: y
-      });
-    }
-    
-    return true;
-  }
-  return false;
-}
-
-
-  setupMouseTracking() {
-    this.canvas.addEventListener('mousemove', (e) => {
-      const rect = this.canvas.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+    if (!savedCharacter || !savedGame) {
+      window.location.href = 'index.html';
+    } else {
+      const character = JSON.parse(savedCharacter);
+      const gameInfo = JSON.parse(savedGame);
       
-      const gridX = Math.floor(mouseX / this.cellSize);
-      const gridY = Math.floor(mouseY / this.cellSize);
+      const game = new Game(gameInfo.mapSeed);
+      game.character = character;
+      game.gameName = gameInfo.gameName;
+      game.socket = socket;
+      game.otherPlayers = gameInfo.players || [];
+
+      const inventory = new Inventory(game);
+      game.inventory = inventory;
+
+      const movement = new Movement(game);
+      const simulator = new Simulator(game, movement);
       
-      const enemy = this.enemies.find(e => e.x === gridX && e.y === gridY);
+      const fight = new Fight(game);
+      game.fight = fight;
       
-      if (enemy) {
-        if (!enemy.monsterData) {
-          enemy.monsterData = getRandomMonster();
+      const skillSystem = new SkillSystem(game);
+      game.skills = skillSystem;
+      
+      // Broadcast initial location
+      socket.emit('update_location', {
+        gameName: gameInfo.gameName,
+        location: 'Skargnes'
+      });
+      
+      socket.on('position_updated', (data) => {
+        const otherPlayer = game.otherPlayers.find(p => p.name === data.playerName);
+        if (otherPlayer) {
+          otherPlayer.x = data.x;
+          otherPlayer.y = data.y;
+          game.render();
         }
-        this.hoveredEnemy = {
-          x: mouseX,
-          y: mouseY,
-          data: enemy.monsterData
-        };
-      } else {
-        this.hoveredEnemy = null;
-      }
-      
-      this.render();
-    });
-
-    this.canvas.addEventListener('mouseleave', () => {
-      this.hoveredEnemy = null;
-      this.render();
-    });
-  }
-
-  drawPlayer(x, y) {
-    const px = x * this.cellSize;
-    const py = y * this.cellSize;
-    const inventory = this.inventory;
-    
-    const centerX = px + this.cellSize / 2;
-    const centerY = py + this.cellSize / 2;
-    const itemSize = this.cellSize / 2;
-    
-    this.ctx.fillStyle = 'rgba(74, 255, 74, 0.1)';
-    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-    
-    if (inventory.equipped.helm) {
-      this.drawItemIcon(inventory.equipped.helm, centerX - itemSize/2, py + 2, itemSize, itemSize);
-    }
-    
-    if (inventory.equipped.weapon) {
-      this.drawItemIcon(inventory.equipped.weapon, px - 4, centerY - itemSize/2, itemSize, itemSize);
-    }
-    
-    if (inventory.equipped.armor) {
-      this.drawItemIcon(inventory.equipped.armor, centerX - itemSize/2, centerY - itemSize/2, itemSize, itemSize);
-    }
-    
-    if (inventory.equipped.shield) {
-      this.drawItemIcon(inventory.equipped.shield, px + this.cellSize - itemSize + 4, centerY - itemSize/2, itemSize, itemSize);
-    }
-    
-    if (!inventory.equipped.weapon && !inventory.equipped.armor && 
-        !inventory.equipped.helm && !inventory.equipped.shield) {
-      this.ctx.fillStyle = '#4aff4a';
-      this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-    }
-  }
-
-  drawItemIcon(item, x, y, width, height) {
-    if (item.image) {
-      const img = new Image();
-      img.src = item.image;
-      
-      if (img.complete) {
-        const filter = (this.imageFilters && this.imageFilters[item.type]) || this.imageFilter;
-        
-        if (filter) {
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = width;
-          tempCanvas.height = height;
-          const tempCtx = tempCanvas.getContext('2d');
-          
-          tempCtx.drawImage(img, 0, 0, width, height);
-          
-          tempCtx.globalCompositeOperation = 'source-atop';
-          tempCtx.fillStyle = filter.color;
-          tempCtx.globalAlpha = filter.opacity;
-          tempCtx.fillRect(0, 0, width, height);
-          
-          this.ctx.drawImage(tempCanvas, x, y);
-        } else {
-          this.ctx.drawImage(img, x, y, width, height);
-        }
-      } else {
-        img.onload = () => {
-          this.render();
-        };
-        img.onerror = () => {
-          this.ctx.fillStyle = this.getItemColor(item);
-          this.ctx.fillRect(x, y, width, height);
-        };
-      }
-    } else {
-      this.ctx.fillStyle = this.getItemColor(item);
-      this.ctx.fillRect(x, y, width, height);
-    }
-  }
-
-  getItemColor(item) {
-    switch(item.type) {
-      case 'weapon': return '#ff4a4a';
-      case 'armor': return '#4a9eff';
-      case 'helm': return '#ffff4a';
-      case 'shield': return '#ff8800';
-      default: return '#888888';
-    }
-  }
-
-  render() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    for (let y = 0; y < this.gridSize; y++) {
-      for (let x = 0; x < this.gridSize; x++) {
-        const px = x * this.cellSize;
-        const py = y * this.cellSize;
-        
-        if ((x + y) % 2 === 0) {
-          this.ctx.fillStyle = '#1a1a1a';
-        } else {
-          this.ctx.fillStyle = '#0f0f0f';
-        }
-        
-        this.ctx.fillRect(px, py, this.cellSize, this.cellSize);
-      }
-    }
-
-    this.ctx.strokeStyle = '#333';
-    this.ctx.lineWidth = 1;
-    
-    for (let i = 0; i <= this.gridSize; i++) {
-      const pos = i * this.cellSize;
-      
-      this.ctx.beginPath();
-      this.ctx.moveTo(pos, 0);
-      this.ctx.lineTo(pos, this.canvas.height);
-      this.ctx.stroke();
-      
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, pos);
-      this.ctx.lineTo(this.canvas.width, pos);
-      this.ctx.stroke();
-    }
-
-    if (this.inTown && this.currentTown) {
-      this.currentTown.drawTown(this.ctx, this.cellSize);
-    } else {
-      if (this.shrines) {
-        this.shrines.forEach(shrine => {
-          this.drawCell(shrine.x, shrine.y, '#9d4aff');
-        });
-      }
-
-      this.traps.forEach(trap => {
-        this.drawCell(trap.x, trap.y, '#ff8800');
       });
 
-      this.enemies.forEach(enemy => {
-        this.drawCell(enemy.x, enemy.y, '#ff4a4a');
+      socket.on('location_updated', (data) => {
+        const otherPlayer = game.otherPlayers.find(p => p.name === data.playerName);
+        if (otherPlayer) {
+          otherPlayer.location = data.location;
+        }
+        console.log(data.playerName + ' moved to ' + data.location);
       });
+
+      socket.on('player_left', (data) => {
+        game.otherPlayers = game.otherPlayers.filter(p => p.name !== data.name);
+        game.setMessage(data.name + ' left the game');
+        game.render();
+      });
+
+      // Initialize town
+      const skargnes = createSkargnes(game, gameInfo.mapSeed);
+      skargnes.enter();
+      
+      game.setMessage('Welcome! Press E near NPCs to interact, WASD to move');
     }
-
-    this.otherPlayers.forEach(player => {
-      this.drawOtherPlayer(player.x, player.y, player.name);
-    });
-
-    this.drawPlayer(this.player.x, this.player.y);
-
-    if (this.hoveredEnemy) {
-      this.drawEnemyTooltip(this.hoveredEnemy.x, this.hoveredEnemy.y, this.hoveredEnemy.data);
-    }
-  }
-  
-  drawEnemyTooltip(mouseX, mouseY, monster) {
-    const padding = 15;
-    const lineHeight = 18;
-    const fontSize = 14;
-    
-    const lines = [
-      { text: monster.name, color: '#fff', bold: true },
-      { text: `Damage: ${monster.damage}`, color: '#ff4a4a' },
-      { text: `Defense: ${monster.defense}`, color: '#4a9eff' },
-      { text: `HP: ${monster.hp}`, color: '#4aff4a' },
-      { text: 'Resistances:', color: '#888', small: true }
-    ];
-
-    Object.keys(monster.resistances).forEach(key => {
-      if (monster.resistances[key] > 0) {
-        const percent = (monster.resistances[key] * 100).toFixed(0);
-        lines.push({ 
-          text: `  ${key}: ${percent}%`, 
-          color: '#ffff4a',
-          small: true
-        });
-      }
-    });
-
-    this.ctx.font = `${fontSize}px Arial`;
-    const maxWidth = Math.max(...lines.map(line => this.ctx.measureText(line.text).width));
-    const tooltipWidth = maxWidth + padding * 2;
-    const tooltipHeight = lines.length * lineHeight + padding * 2;
-
-    let tooltipX = mouseX + 15;
-    let tooltipY = mouseY + 15;
-
-    if (tooltipX + tooltipWidth > this.canvas.width) {
-      tooltipX = mouseX - tooltipWidth - 15;
-    }
-    if (tooltipY + tooltipHeight > this.canvas.height) {
-      tooltipY = mouseY - tooltipHeight - 15;
-    }
-
-    this.ctx.fillStyle = 'rgba(26, 26, 26, 0.95)';
-    this.ctx.fillRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
-
-    this.ctx.strokeStyle = '#4a7c3e';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight);
-
-    let currentY = tooltipY + padding + fontSize;
-    lines.forEach(line => {
-      const size = line.small ? fontSize - 2 : fontSize;
-      this.ctx.font = `${line.bold ? 'bold' : 'normal'} ${size}px Arial`;
-      this.ctx.fillStyle = line.color;
-      this.ctx.fillText(line.text, tooltipX + padding, currentY);
-      currentY += lineHeight;
-    });
-  }
-  
-  drawCell(x, y, color) {
-    const px = x * this.cellSize;
-    const py = y * this.cellSize;
-    
-    this.ctx.fillStyle = color;
-    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
-  }
-
-  testImageFilter(color, opacity, itemType) {
-    if (!this.imageFilters) this.imageFilters = {};
-    
-    if (itemType) {
-      this.imageFilters[itemType] = { color: color, opacity: opacity };
-    } else {
-      this.imageFilter = { color: color, opacity: opacity };
-    }
-    
-    this.render();
-    console.log(`Filter applied to ${itemType || 'all items'}: ${color} with opacity ${opacity}`);
-  }
-
-  removeImageFilter(itemType) {
-    if (itemType) {
-      if (this.imageFilters) {
-        delete this.imageFilters[itemType];
-      }
-    } else {
-      this.imageFilter = null;
-      this.imageFilters = {};
-    }
-    this.render();
-    console.log(`Filter removed from ${itemType || 'all items'}`);
-  }
-}
-
-// Initialization code stays the same
-let game;
-let inventory;
-let movement;
-let simulator;
-
-const savedCharacter = localStorage.getItem('character');
-if (!savedCharacter) {
-  window.location.href = 'index.html';
-} else {
-  const character = JSON.parse(savedCharacter);
-  console.log('Loaded character:', character);
-  
-  game = new Game();
-  game.character = character;
-
-  inventory = new Inventory(game);
-  game.inventory = inventory;
-
-  movement = new Movement(game);
-  simulator = new Simulator(game, movement); 
-  
-  const fight = new Fight(game);
-  game.fight = fight;
-  
-  const skillSystem = new SkillSystem(game);
-  game.skills = skillSystem;
-  
-  const lobby = new Lobby(game);
-  game.lobby = lobby;
-  
-  const skargnes = createSkargnes(game);
-  skargnes.enter();
-  console.log('Initial map seed:', game.mapSeed); // Add this line
-  console.log('Game initialized. Press P to open lobby.');
-}
-</script>
+  </script>
 </body>
 </html>
