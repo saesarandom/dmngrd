@@ -12,7 +12,17 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
+
+// Redirect root to login
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'login.html'));
+});
+
+// Static files AFTER the root route
 app.use(express.static(path.join(__dirname)));
+
+
+
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -47,6 +57,29 @@ async function initDB() {
         location VARCHAR(50) DEFAULT 'Skargnes'
       );
     `);
+
+   await pool.query(`
+  CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(16) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`);
+
+await pool.query(`
+  CREATE TABLE IF NOT EXISTS characters (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(21) NOT NULL,
+    level INTEGER DEFAULT 1,
+    alignment VARCHAR(20),
+    race VARCHAR(20),
+    class VARCHAR(20),
+    stats JSONB,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`);
     
     console.log('✓ Database ready');
   } catch (err) {
@@ -56,10 +89,92 @@ async function initDB() {
 
 initDB();
 
+
+app.get('/characters/:userId', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM characters WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.params.userId]
+    );
+    res.json({ characters: result.rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/characters', async (req, res) => {
+  try {
+    const { userId, name, level, alignment, race, class: charClass, stats } = req.body;
+    
+    const result = await pool.query(
+      'INSERT INTO characters (user_id, name, level, alignment, race, class, stats) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [userId, name, level, alignment, race, charClass, JSON.stringify(stats)]
+    );
+
+    res.json({ character: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/games', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
     res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const bcrypt = require('bcrypt');
+
+// At the top with other requires
+const SALT_ROUNDS = 10;
+
+// Auth routes
+app.post('/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    const existing = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
+    const result = await pool.query(
+      'INSERT INTO users (username, password) VALUES ($1, $2) RETURNING id, username',
+      [username, hashedPassword]
+    );
+
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    const result = await pool.query(
+      'SELECT id, username, password FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+    const validPassword = await bcrypt.compare(password, user.password);
+
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    res.json({ user: { id: user.id, username: user.username } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

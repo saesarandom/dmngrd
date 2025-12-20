@@ -271,11 +271,34 @@
       }
     }
 
-    const app = document.getElementById('app');
-    new CharacterCreation(app, (character) => {
-      localStorage.setItem('character', JSON.stringify(character));
-      window.location.href = 'lobby.html';
+   const user = JSON.parse(localStorage.getItem('user'));
+if (!user) {
+  window.location.href = 'login.html';
+}
+
+const app = document.getElementById('app');
+new CharacterCreation(app, async (character) => {
+  try {
+    const response = await fetch('http://localhost:3000/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.id,
+        ...character
+      })
     });
+
+    const data = await response.json();
+    if (response.ok) {
+      localStorage.setItem('character', JSON.stringify(data.character));
+      window.location.href = 'lobby.html';
+    } else {
+      alert('Error: ' + data.error);
+    }
+  } catch (err) {
+    alert('Server error');
+  }
+});
   </script>
 </body>
 </html>
