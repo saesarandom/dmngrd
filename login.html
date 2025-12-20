@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial; background-color: #0a0a0a; color: #fff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { width: 100%; max-width: 400px; background-color: #1a1a1a; border: 2px solid #4a7c3e; border-radius: 8px; padding: 40px; }
+    h1 { text-align: center; color: #4aff4a; font-size: 32px; margin-bottom: 30px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; color: #aaa; font-size: 14px; margin-bottom: 8px; }
+    input { width: 100%; padding: 12px; background-color: #0a0a0a; border: 2px solid #333; border-radius: 4px; color: #fff; font-size: 16px; }
+    input:focus { outline: none; border-color: #4a7c3e; }
+    .error { color: #ff4a4a; font-size: 12px; margin-top: 5px; display: none; }
+    button { width: 100%; padding: 15px; background-color: #4a7c3e; color: #fff; border: none; border-radius: 4px; font-size: 16px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+    button:hover { background-color: #5a8c4e; }
+    button:disabled { background-color: #333; cursor: not-allowed; }
+    .toggle { text-align: center; margin-top: 20px; color: #888; font-size: 14px; }
+    .toggle a { color: #4aff4a; cursor: pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Login</h1>
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="username" maxlength="16" placeholder="Enter username">
+      <div class="error" id="usernameError"></div>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" maxlength="16" placeholder="Enter password">
+      <div class="error" id="passwordError"></div>
+    </div>
+    <button id="loginBtn">Login</button>
+    <div class="toggle">
+      Don't have an account? <a id="toggleRegister">Register</a>
+    </div>
+  </div>
+
+  <script>
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const toggleRegister = document.getElementById('toggleRegister');
+    const usernameError = document.getElementById('usernameError');
+    const passwordError = document.getElementById('passwordError');
+
+    let isRegisterMode = false;
+
+    function validateInput(value) {
+      return /^[a-zA-Z0-9]{3,16}$/.test(value);
+    }
+
+    usernameInput.addEventListener('input', (e) => {
+      const filtered = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      e.target.value = filtered;
+      if (filtered.length > 0 && filtered.length < 3) {
+        usernameError.textContent = 'Too short (min 3)';
+        usernameError.style.display = 'block';
+      } else {
+        usernameError.style.display = 'none';
+      }
+    });
+
+    passwordInput.addEventListener('input', (e) => {
+      const filtered = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
+      e.target.value = filtered;
+      if (filtered.length > 0 && filtered.length < 3) {
+        passwordError.textContent = 'Too short (min 3)';
+        passwordError.style.display = 'block';
+      } else {
+        passwordError.style.display = 'none';
+      }
+    });
+
+    toggleRegister.addEventListener('click', () => {
+      isRegisterMode = !isRegisterMode;
+      document.querySelector('h1').textContent = isRegisterMode ? 'Register' : 'Login';
+      loginBtn.textContent = isRegisterMode ? 'Register' : 'Login';
+      toggleRegister.textContent = isRegisterMode ? 'Login' : 'Register';
+      document.querySelector('.toggle').innerHTML = isRegisterMode 
+        ? 'Already have an account? <a id="toggleRegister">Login</a>'
+        : "Don't have an account? <a id='toggleRegister'>Register</a>";
+      document.getElementById('toggleRegister').addEventListener('click', toggleRegister.onclick);
+    });
+
+    loginBtn.addEventListener('click', async () => {
+      const username = usernameInput.value;
+      const password = passwordInput.value;
+
+      if (!validateInput(username)) {
+        usernameError.textContent = 'Invalid username';
+        usernameError.style.display = 'block';
+        return;
+      }
+
+      if (!validateInput(password)) {
+        passwordError.textContent = 'Invalid password';
+        passwordError.style.display = 'block';
+        return;
+      }
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Please wait...';
+
+      try {
+        const response = await fetch('http://localhost:3000/' + (isRegisterMode ? 'register' : 'login'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+          window.location.href = 'character-select.html';
+        } else {
+          passwordError.textContent = data.error;
+          passwordError.style.display = 'block';
+          loginBtn.disabled = false;
+          loginBtn.textContent = isRegisterMode ? 'Register' : 'Login';
+        }
+      } catch (err) {
+        passwordError.textContent = 'Server error';
+        passwordError.style.display = 'block';
+        loginBtn.disabled = false;
+        loginBtn.textContent = isRegisterMode ? 'Register' : 'Login';
+      }
+    });
+
+    passwordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loginBtn.click();
+    });
+  </script>
+</body>
+</html>

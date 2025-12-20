@@ -109,14 +109,12 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Check if player already exists (creator case)
       const existing = await pool.query(
         'SELECT * FROM players WHERE game_id = $1 AND name = $2',
         [data.gameId, data.player.name]
       );
 
       if (existing.rows.length === 0) {
-        // New player - insert
         await pool.query(
           'INSERT INTO players (game_id, socket_id, name, class, race, level, x, y) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
           [data.gameId, socket.id, data.player.name, data.player.class, data.player.race, data.player.level, data.player.x, data.player.y]
@@ -130,11 +128,9 @@ io.on('connection', (socket) => {
       
       io.emit('games_updated', games.rows);
       
-      // Send ALL other players to this player
       const othersForThisPlayer = players.rows.filter(p => p.name !== data.player.name);
       socket.emit('players_in_game', othersForThisPlayer);
       
-      // Send this player to all existing players
       const othersInRoom = players.rows.filter(p => p.socket_id !== socket.id);
       socket.to(`game_${data.gameId}`).emit('players_in_game', othersInRoom);
       
@@ -146,19 +142,20 @@ io.on('connection', (socket) => {
   });
 
   socket.on('update_position', (data) => {
-    const { gameId, x, y, playerName } = data;
+    const { gameId, playerName, x, y, equipment } = data;
     io.to(`game_${gameId}`).emit('position_updated', {
       playerName,
       x,
-      y
+      y,
+      equipment
     });
   });
 
   socket.on('update_location', (data) => {
-    const { gameId, location } = data;
+    const { gameId, location, playerName } = data;
     io.to(`game_${gameId}`).emit('location_updated', {
       socketId: socket.id,
-      playerName: data.playerName,
+      playerName: playerName,
       location
     });
   });

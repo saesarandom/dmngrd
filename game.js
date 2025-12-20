@@ -148,16 +148,47 @@ class Game {
     this.render();
   }
 
-  drawOtherPlayer(x, y, playerName) {
+  drawOtherPlayer(x, y, player) {
     const px = x * this.cellSize;
     const py = y * this.cellSize;
+    const equipment = player.equipment || {};
     
-
+    const centerX = px + this.cellSize / 2;
+    const centerY = py + this.cellSize / 2;
+    const itemSize = this.cellSize / 2;
     
-    this.ctx.fillStyle = 'yellow';
+    // Background
+    this.ctx.fillStyle = 'rgba(74, 159, 255, 0.1)';
+    this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+    
+    // Draw equipment
+    if (equipment.helm) {
+      this.drawItemIcon(equipment.helm, centerX - itemSize/2, py + 2, itemSize, itemSize);
+    }
+    
+    if (equipment.weapon) {
+      this.drawItemIcon(equipment.weapon, px - 4, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (equipment.armor) {
+      this.drawItemIcon(equipment.armor, centerX - itemSize/2, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    if (equipment.shield) {
+      this.drawItemIcon(equipment.shield, px + this.cellSize - itemSize + 4, centerY - itemSize/2, itemSize, itemSize);
+    }
+    
+    // If no equipment, show colored square
+    if (!equipment.weapon && !equipment.armor && !equipment.helm && !equipment.shield) {
+      this.ctx.fillStyle = '#4a9eff';
+      this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+    }
+    
+    // Draw name
+    this.ctx.fillStyle = '#4a9eff';
     this.ctx.font = '13px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);
+    this.ctx.fillText(player.name, px + this.cellSize / 2, py - 5);
   }
 
   drawPlayer(x, y) {
@@ -294,7 +325,7 @@ class Game {
     });
 
     visiblePlayers.forEach(player => {
-      this.drawOtherPlayer(player.x, player.y, player.name);
+      this.drawOtherPlayer(player.x, player.y, player);
     });
 
     this.drawPlayer(this.player.x, this.player.y);

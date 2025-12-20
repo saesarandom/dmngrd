@@ -48,6 +48,11 @@ exit() {
   this.game.traps = mapData.traps;
   this.game.shrines = mapData.shrines;
   this.game.player = mapData.playerSpawn;
+
+   this.game.player = {
+    x: Math.floor(Math.random() * this.game.gridSize),
+    y: Math.floor(Math.random() * this.game.gridSize)
+  };
   
   this.game.render();
   this.game.setMessage('You entered the wilderness!');

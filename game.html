@@ -83,11 +83,17 @@
         
         let otherPlayer = game.otherPlayers.find(p => p.name === data.playerName);
         if (!otherPlayer) {
-          otherPlayer = { name: data.playerName, x: data.x, y: data.y };
+          otherPlayer = { 
+            name: data.playerName, 
+            x: data.x, 
+            y: data.y,
+            equipment: data.equipment || {}
+          };
           game.otherPlayers.push(otherPlayer);
         } else {
           otherPlayer.x = data.x;
           otherPlayer.y = data.y;
+          otherPlayer.equipment = data.equipment || {};
         }
         game.render();
       });
@@ -118,40 +124,44 @@
       });
 
       socket.on('connect', () => {
-  socket.emit('join_game', {
-    gameId: gameInfo.id,
-    password: gameInfo.password || '',
-    player: {
-      name: character.name,
-      class: character.class,
-      race: character.race,
-      level: character.level,
-      x: 6,
-      y: 1
-    }
-  });
-  
-  // Broadcast initial location
-  const location = game.inTown && game.currentTown ? game.currentTown.name : 'wilderness';
-  socket.emit('update_location', {
-    gameId: gameInfo.id,
-    playerName: character.name,
-    location: location
-  });
-});
+        socket.emit('join_game', {
+          gameId: gameInfo.id,
+          password: gameInfo.password || '',
+          player: {
+            name: character.name,
+            class: character.class,
+            race: character.race,
+            level: character.level,
+            x: 6,
+            y: 1
+          }
+        });
+        
+        socket.emit('update_location', {
+          gameId: gameInfo.id,
+          playerName: character.name,
+          location: 'Skargnes'
+        });
+      });
       
       // Initialize town
       const skargnes = createSkargnes(game, gameInfo.mapSeed);
       skargnes.enter();
       
-      // Broadcast position every 500ms
+      // Broadcast position AND equipment every 500ms
       setInterval(() => {
         if (socket.connected) {
           socket.emit('update_position', {
             gameId: gameInfo.id,
             playerName: character.name,
             x: game.player.x,
-            y: game.player.y
+            y: game.player.y,
+            equipment: {
+              weapon: game.inventory.equipped.weapon,
+              armor: game.inventory.equipped.armor,
+              helm: game.inventory.equipped.helm,
+              shield: game.inventory.equipped.shield
+            }
           });
         }
       }, 500);
