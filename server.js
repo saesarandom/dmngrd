@@ -42,7 +42,7 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT NOW()
       );
     `);
-    
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS players (
         id SERIAL PRIMARY KEY,
@@ -58,7 +58,7 @@ async function initDB() {
       );
     `);
 
-   await pool.query(`
+    await pool.query(`
   CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     username VARCHAR(16) UNIQUE NOT NULL,
@@ -67,7 +67,7 @@ async function initDB() {
   );
 `);
 
-await pool.query(`
+    await pool.query(`
   CREATE TABLE IF NOT EXISTS characters (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -80,7 +80,7 @@ await pool.query(`
     created_at TIMESTAMP DEFAULT NOW()
   );
 `);
-    
+
     console.log('✓ Database ready');
   } catch (err) {
     console.error('DB error:', err.message);
@@ -105,11 +105,32 @@ app.get('/characters/:userId', async (req, res) => {
 app.post('/characters', async (req, res) => {
   try {
     const { userId, name, level, alignment, race, class: charClass, stats } = req.body;
-    
+
     const result = await pool.query(
       'INSERT INTO characters (user_id, name, level, alignment, race, class, stats) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
       [userId, name, level, alignment, race, charClass, JSON.stringify(stats)]
     );
+
+    res.json({ character: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update character stats (inventory, equipment, etc.)
+app.put('/characters/:characterId', async (req, res) => {
+  try {
+    const { characterId } = req.params;
+    const { stats } = req.body;
+
+    const result = await pool.query(
+      'UPDATE characters SET stats = $1 WHERE id = $2 RETURNING *',
+      [JSON.stringify(stats), characterId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Character not found' });
+    }
 
     res.json({ character: result.rows[0] });
   } catch (err) {
@@ -135,7 +156,7 @@ const SALT_ROUNDS = 10;
 app.post('/register', async (req, res) => {
   try {
     const { username, password } = req.body;
-    
+
     const existing = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Username already exists' });
@@ -157,7 +178,7 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    
+
     const result = await pool.query(
       'SELECT id, username, password FROM users WHERE username = $1',
       [username]
@@ -186,7 +207,7 @@ io.on('connection', (socket) => {
   socket.on('create_game', async (data) => {
     try {
       const gameId = Math.floor(Date.now() / 1000);
-      
+
       await pool.query(
         'INSERT INTO games (id, name, password, pvp_enabled, map_seed, creator_name) VALUES ($1, $2, $3, $4, $5, $6)',
         [gameId, data.gameName, data.password || null, data.pvpEnabled, data.mapSeed, data.player.name]
@@ -198,10 +219,10 @@ io.on('connection', (socket) => {
       );
 
       socket.join(`game_${gameId}`);
-      
+
       const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
       io.emit('games_updated', games.rows);
-      
+
       const createdGame = await pool.query('SELECT * FROM games WHERE id = $1', [gameId]);
       socket.emit('game_created', createdGame.rows[0]);
     } catch (err) {
@@ -213,7 +234,7 @@ io.on('connection', (socket) => {
   socket.on('join_game', async (data) => {
     try {
       const game = await pool.query('SELECT * FROM games WHERE id = $1', [data.gameId]);
-      
+
       if (game.rows.length === 0) {
         socket.emit('error', { message: 'Game not found' });
         return;
@@ -237,18 +258,22 @@ io.on('connection', (socket) => {
       }
 
       socket.join(`game_${data.gameId}`);
-      
+
+      // Store game context on socket for cleanup on disconnect
+      socket.gameId = data.gameId;
+      socket.playerName = data.player.name;
+
       const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
       const players = await pool.query('SELECT * FROM players WHERE game_id = $1', [data.gameId]);
-      
+
       io.emit('games_updated', games.rows);
-      
+
       const othersForThisPlayer = players.rows.filter(p => p.name !== data.player.name);
       socket.emit('players_in_game', othersForThisPlayer);
-      
+
       const othersInRoom = players.rows.filter(p => p.socket_id !== socket.id);
       socket.to(`game_${data.gameId}`).emit('players_in_game', othersInRoom);
-      
+
       socket.emit('game_joined', { ...game.rows[0], players: players.rows });
     } catch (err) {
       console.error('Error:', err.message);
@@ -275,8 +300,56 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', () => {
+  // Handle explicit leave_game event (from beforeunload)
+  socket.on('leave_game', async (data) => {
+    try {
+      const { gameId, playerName } = data;
+
+      // Remove player from database
+      await pool.query(
+        'DELETE FROM players WHERE game_id = $1 AND name = $2',
+        [gameId, playerName]
+      );
+
+      // Notify other players
+      socket.to(`game_${gameId}`).emit('player_left', { name: playerName });
+
+      // Update games list
+      const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
+      io.emit('games_updated', games.rows);
+
+      console.log(`✓ Player ${playerName} left game ${gameId}`);
+    } catch (err) {
+      console.error('Error leaving game:', err.message);
+    }
+  });
+
+  socket.on('disconnect', async () => {
     console.log('✗ Disconnected:', socket.id);
+
+    // Clean up player if they were in a game
+    if (socket.gameId && socket.playerName) {
+      try {
+        // Remove player from database
+        await pool.query(
+          'DELETE FROM players WHERE game_id = $1 AND name = $2',
+          [socket.gameId, socket.playerName]
+        );
+
+        // Notify other players in the game
+        socket.to(`game_${socket.gameId}`).emit('player_left', {
+          name: socket.playerName
+        });
+
+        // Update games list for lobby
+        const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
+        io.emit('games_updated', games.rows);
+
+        console.log(`✓ Cleaned up player ${socket.playerName} from game ${socket.gameId}`);
+      } catch (err) {
+        console.error('Error cleaning up on disconnect:', err.message);
+      }
+    }
   });
 });
 

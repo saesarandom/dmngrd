@@ -4,7 +4,7 @@ class Inventory {
     this.isOpen = false;
     this.slots = Array(30).fill(null);
     this.gold = 0;
-    
+
     // Equipment slots
     this.equipped = {
       weapon: null,
@@ -12,10 +12,14 @@ class Inventory {
       helm: null,
       shield: null
     };
-    
+
+    // For item management
+    this.selectedItem = null;
+    this.selectedSlot = null;
+
     this.setupEventListeners();
     this.createInventoryUI();
-    
+
     // Load starter gear
     this.loadStarterGear();
   }
@@ -98,21 +102,24 @@ class Inventory {
         </div>
 
         <div style="text-align: center; margin-top: 30px; color: #888; font-size: 14px;">
-          Press I or ESC to close
+          <div>Press I or ESC to close</div>
+          <div style="margin-top: 10px; font-size: 12px;">
+            Click equipped items to unequip • Click inventory items to equip • Shift + Right-click to delete
+          </div>
         </div>
       </div>
     `;
 
     document.body.appendChild(inventoryDiv);
     this.inventoryUI = inventoryDiv;
-    
+
     this.generateInventorySlots();
   }
 
   generateInventorySlots() {
     const grid = document.getElementById('inventoryGrid');
     grid.innerHTML = '';
-    
+
     for (let i = 0; i < 30; i++) {
       const slot = document.createElement('div');
       slot.className = 'inventory-slot';
@@ -129,17 +136,17 @@ class Inventory {
         justify-content: center;
         padding: 10px;
       `;
-      
+
       slot.addEventListener('mouseenter', (e) => {
         e.target.style.borderColor = '#4a7c3e';
         e.target.style.backgroundColor = '#222';
       });
-      
+
       slot.addEventListener('mouseleave', (e) => {
         e.target.style.borderColor = '#333';
         e.target.style.backgroundColor = '#1a1a1a';
       });
-      
+
       grid.appendChild(slot);
     }
   }
@@ -187,6 +194,60 @@ class Inventory {
     if (this.isOpen) this.render();
   }
 
+  unequipItem(slotType) {
+    const item = this.equipped[slotType];
+    if (!item) return;
+
+    // Find empty slot in inventory
+    const emptySlot = this.slots.findIndex(slot => slot === null);
+    if (emptySlot !== -1) {
+      this.slots[emptySlot] = item;
+      this.equipped[slotType] = null;
+      this.game.setMessage(`Unequipped: ${item.name}`);
+      if (this.isOpen) this.render();
+      return true;
+    } else {
+      this.game.setMessage('Inventory is full! Cannot unequip.');
+      return false;
+    }
+  }
+
+  swapEquipment(inventoryIndex) {
+    const item = this.slots[inventoryIndex];
+    if (!item) return;
+
+    // Determine slot type from item
+    let slotType = null;
+    if (item.type === 'weapon') slotType = 'weapon';
+    else if (item.type === 'armor') slotType = 'armor';
+    else if (item.type === 'helm') slotType = 'helm';
+    else if (item.type === 'shield') slotType = 'shield';
+
+    if (!slotType) {
+      this.game.setMessage('This item cannot be equipped');
+      return;
+    }
+
+    // Swap: put current equipped item back to inventory, equip new item
+    const oldItem = this.equipped[slotType];
+    this.equipped[slotType] = item;
+    this.slots[inventoryIndex] = oldItem; // Can be null if nothing was equipped
+
+    this.game.setMessage(`Equipped: ${item.name}`);
+    if (this.isOpen) this.render();
+  }
+
+  deleteItem(inventoryIndex) {
+    const item = this.slots[inventoryIndex];
+    if (!item) return;
+
+    if (confirm(`Delete ${item.name}? This cannot be undone.`)) {
+      this.slots[inventoryIndex] = null;
+      this.game.setMessage(`Deleted: ${item.name}`);
+      if (this.isOpen) this.render();
+    }
+  }
+
   render() {
     // Update gold display
     document.getElementById('goldAmount').textContent = this.gold;
@@ -203,8 +264,28 @@ class Inventory {
       const item = this.slots[index];
       if (item) {
         slot.innerHTML = this.renderItem(item);
+        slot.style.cursor = 'pointer';
+
+        // Left click to equip
+        slot.onclick = (e) => {
+          e.preventDefault();
+          this.swapEquipment(index);
+        };
+
+        // Right click to delete (with Shift key)
+        slot.oncontextmenu = (e) => {
+          e.preventDefault();
+          if (e.shiftKey) {
+            this.deleteItem(index);
+          } else {
+            this.game.setMessage('Hold Shift + Right-click to delete item');
+          }
+        };
       } else {
         slot.innerHTML = '';
+        slot.style.cursor = 'default';
+        slot.onclick = null;
+        slot.oncontextmenu = null;
       }
     });
   }
@@ -212,26 +293,34 @@ class Inventory {
   renderEquipmentSlot(slotType, item) {
     const slotElement = document.querySelector(`#${slotType}Slot .equipment-item`);
     if (!slotElement) return;
-    
+
     if (item) {
       slotElement.innerHTML = this.renderItem(item, true);
+      slotElement.style.cursor = 'pointer';
+
+      // Click to unequip
+      slotElement.onclick = () => {
+        this.unequipItem(slotType);
+      };
     } else {
       slotElement.innerHTML = '<div style="color: #444; font-size: 12px; text-align: center;">Empty</div>';
+      slotElement.style.cursor = 'default';
+      slotElement.onclick = null;
     }
   }
 
- renderItem(item, isEquipment = false) {
-  const tierColor = item.tierData.color;
-  const stats = [];
-  
-  if (item.damage) stats.push(`DMG: ${item.damage}`);
-  if (item.defense) stats.push(`DEF: ${item.defense}`);
-  if (item.speed) stats.push(`SPD: ${item.speed}`);
-  if (item.blockChance) stats.push(`Block: ${(item.blockChance * 100).toFixed(0)}%`);
-  
-  const hasImage = item.image && item.image !== '';
-  
-  return `
+  renderItem(item, isEquipment = false) {
+    const tierColor = item.tierData.color;
+    const stats = [];
+
+    if (item.damage) stats.push(`DMG: ${item.damage}`);
+    if (item.defense) stats.push(`DEF: ${item.defense}`);
+    if (item.speed) stats.push(`SPD: ${item.speed}`);
+    if (item.blockChance) stats.push(`Block: ${(item.blockChance * 100).toFixed(0)}%`);
+
+    const hasImage = item.image && item.image !== '';
+
+    return `
     <div style="width: 100%; text-align: ${isEquipment ? 'left' : 'center'}; display: flex; ${isEquipment ? 'flex-direction: row; align-items: center; gap: 10px;' : 'flex-direction: column; align-items: center;'}">
       ${hasImage ? `
         <img src="${item.image}" 
@@ -250,5 +339,5 @@ class Inventory {
       </div>
     </div>
   `;
-}
+  }
 }

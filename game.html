@@ -1,23 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; background-color: #0a0a0a; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
-    #gameCanvas { border: 2px solid #333; box-shadow: 0 0 40px rgba(33, 33, 62, 0.3); image-rendering: pixelated; }
-    #resolutionMenu { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 30px; display: none; z-index: 1000; }
-    #resolutionMenu h2 { color: #333; text-align: center; margin-bottom: 20px; }
-    .resolution-btn { width: 100%; padding: 15px; margin-bottom: 10px; background-color: #0a0a0a; border: 2px solid #333; border-radius: 4px; color: #fff; font-size: 16px; cursor: pointer; }
-    .resolution-btn:hover { background-color: #222; border-color: #444; }
-    .resolution-btn.active { background-color: #333; }
-    #info { position: fixed; top: 20px; right: 20px; background-color: rgba(26, 26, 26, 0.9); border: 1px solid #333; border-radius: 4px; padding: 10px 15px; font-size: 14px; color: #888; }
-    #messageBox { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 600px; min-height: 120px; background-color: rgba(26, 26, 26, 0.95); border: 2px solid #333; border-radius: 4px; padding: 20px; color: #fff; font-size: 16px; display: none; }
-    #messageBox.show { display: block; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #0a0a0a;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    #gameCanvas {
+      border: 2px solid #333;
+      box-shadow: 0 0 40px rgba(33, 33, 62, 0.3);
+      image-rendering: pixelated;
+    }
+
+    #resolutionMenu {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #1a1a1a;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 30px;
+      display: none;
+      z-index: 1000;
+    }
+
+    #resolutionMenu h2 {
+      color: #333;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .resolution-btn {
+      width: 100%;
+      padding: 15px;
+      margin-bottom: 10px;
+      background-color: #0a0a0a;
+      border: 2px solid #333;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .resolution-btn:hover {
+      background-color: #222;
+      border-color: #444;
+    }
+
+    .resolution-btn.active {
+      background-color: #333;
+    }
+
+    #info {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: rgba(26, 26, 26, 0.9);
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px 15px;
+      font-size: 14px;
+      color: #888;
+    }
+
+    #messageBox {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      min-height: 120px;
+      background-color: rgba(26, 26, 26, 0.95);
+      border: 2px solid #333;
+      border-radius: 4px;
+      padding: 20px;
+      color: #fff;
+      font-size: 16px;
+      display: none;
+    }
+
+    #messageBox.show {
+      display: block;
+    }
   </style>
 </head>
+
 <body>
   <canvas id="gameCanvas"></canvas>
   <div id="messageBox"></div>
@@ -54,11 +139,11 @@
     const savedGame = localStorage.getItem('currentGame');
 
     if (!savedCharacter || !savedGame) {
-      window.location.href = 'index.html';
+      window.location.href = 'lobby.html';
     } else {
       const character = JSON.parse(savedCharacter);
       const gameInfo = JSON.parse(savedGame);
-      
+
       const game = new Game(gameInfo.mapSeed);
       game.character = character;
       game.gameName = gameInfo.gameName;
@@ -68,24 +153,31 @@
       const inventory = new Inventory(game);
       game.inventory = inventory;
 
+      // Load saved inventory/equipment if exists
+      if (character.stats && character.stats.inventory) {
+        game.inventory.slots = character.stats.inventory || Array(30).fill(null);
+        game.inventory.equipped = character.stats.equipped || { weapon: null, armor: null, helm: null, shield: null };
+        game.inventory.gold = character.stats.gold || 0;
+      }
+
       const movement = new Movement(game);
       const simulator = new Simulator(game, movement);
-      
+
       const fight = new Fight(game);
       game.fight = fight;
-      
+
       const skillSystem = new SkillSystem(game);
       game.skills = skillSystem;
-      
+
       // Socket handlers
       socket.on('position_updated', (data) => {
         if (data.playerName === character.name) return;
-        
+
         let otherPlayer = game.otherPlayers.find(p => p.name === data.playerName);
         if (!otherPlayer) {
-          otherPlayer = { 
-            name: data.playerName, 
-            x: data.x, 
+          otherPlayer = {
+            name: data.playerName,
+            x: data.x,
             y: data.y,
             equipment: data.equipment || {}
           };
@@ -136,18 +228,69 @@
             y: 1
           }
         });
-        
+
         socket.emit('update_location', {
           gameId: gameInfo.id,
           playerName: character.name,
           location: 'Skargnes'
         });
       });
-      
+
+      // Auto-save function
+      function saveCharacterData() {
+        const characterData = {
+          inventory: game.inventory.slots,
+          equipped: game.inventory.equipped,
+          gold: game.inventory.gold
+        };
+
+        fetch(`${protocol}://${host}/characters/${character.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            stats: characterData
+          }),
+          keepalive: true
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log('Character data saved');
+          })
+          .catch(err => {
+            console.error('Error saving character data:', err);
+          });
+      }
+
+      // Auto-save every 10 minutes (600000 ms)
+      setInterval(() => {
+        saveCharacterData();
+        game.setMessage('Progress auto-saved');
+      }, 600000);
+
+      // Initial save after 1 minute
+      setTimeout(() => {
+        saveCharacterData();
+        game.setMessage('Progress saved');
+      }, 60000);
+
+
+      // Handle page refresh/close - immediate cleanup
+      window.addEventListener('beforeunload', () => {
+        // Clear game data from localStorage so player goes to lobby on refresh
+        localStorage.removeItem('currentGame');
+
+        socket.emit('leave_game', {
+          gameId: gameInfo.id,
+          playerName: character.name
+        });
+      });
+
       // Initialize town
       const skargnes = createSkargnes(game, gameInfo.mapSeed);
       skargnes.enter();
-      
+
       // Broadcast position AND equipment every 500ms
       setInterval(() => {
         if (socket.connected) {
@@ -165,9 +308,10 @@
           });
         }
       }, 500);
-      
+
       game.setMessage('Welcome! Press E near NPCs to interact, WASD to move');
     }
   </script>
 </body>
+
 </html>
