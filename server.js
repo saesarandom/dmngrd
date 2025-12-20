@@ -276,7 +276,12 @@ io.on('connection', (socket) => {
       let inventoryData = {
         slots: Array(30).fill(null),
         equipped: { weapon: null, armor: null, helm: null, shield: null },
-        gold: 0
+        gold: 0,
+        experience: 0,
+        level: 1,
+        monstersKilled: 0,
+        deaths: 0,
+        stats: null
       };
 
       if (character.rows.length > 0 && character.rows[0].stats) {
@@ -284,8 +289,82 @@ io.on('connection', (socket) => {
         if (stats.inventory) inventoryData.slots = stats.inventory;
         if (stats.equipped) inventoryData.equipped = stats.equipped;
         if (stats.gold !== undefined) inventoryData.gold = stats.gold;
+        if (stats.experience !== undefined) inventoryData.experience = stats.experience;
+        if (stats.level !== undefined) inventoryData.level = stats.level;
+        if (stats.monstersKilled !== undefined) inventoryData.monstersKilled = stats.monstersKilled;
+        if (stats.deaths !== undefined) inventoryData.deaths = stats.deaths;
+        if (stats.baseStats) inventoryData.stats = stats.baseStats;
 
         socket.characterId = character.rows[0].id;
+      }
+
+      // Calculate level from experience if not set
+      if (inventoryData.experience > 0 && inventoryData.level === 1) {
+        const EXPERIENCE_TABLE = [
+          0, 64, 77, 93, 113, 137, 166, 202, 244, 296,
+          359, 434, 526, 638, 772, 936, 1134, 1373, 1663, 2015,
+          2440, 2956, 3580, 4337, 5253, 6363, 7707, 9335, 11307, 13696,
+          16589, 20093, 24337, 29478, 35705, 43248, 52384, 63449, 76852, 93086,
+          112749, 136566, 165414, 200356, 242678, 293941, 356032, 431240, 522333, 632670,
+          766313, 928187, 1124254, 1361738, 1649388, 1997799, 2419809, 2930962, 3550089, 4300000,
+          4591991, 4903809, 5236802, 5592406, 5972158, 6377697, 6810774, 7273259, 7767149, 8294576,
+          8857818, 9459308, 10101641, 10787592, 11520122, 12302395, 13137788, 14029908, 14982607, 16000000,
+          17171217, 18428168, 19777129, 21224836, 22778517, 24445929, 26235397, 28155856, 30216894, 32428803,
+          34802626, 37350215, 40084291, 43018504, 46167504, 49547015, 53173909, 57066295, 61243609, 65726706,
+          70537971, 75701426, 81242851, 87189914, 93572308, 100421901, 107772891, 115661981, 124128562, 133214904,
+          142966377, 153431668, 164663029, 176716538, 189652377, 203535133, 218434121, 234423731, 251583798, 270000000,
+          298433158, 329860556, 364597510, 402992543, 445430880, 492338313, 544185474, 601492555, 664834531, 734846922,
+          812232179, 897766721, 992308735, 1096806779, 1212309302, 1339975165, 1481085263, 1637055384, 1809450405, 2000000000,
+          2297396709, 2639015821, 3031433133, 3482202253, 4000000000, 4594793419, 5278031643, 6062866266, 6964404506, 8000000000
+        ];
+
+        for (let i = EXPERIENCE_TABLE.length - 1; i >= 0; i--) {
+          if (inventoryData.experience >= EXPERIENCE_TABLE[i]) {
+            inventoryData.level = Math.min(i + 1, 150);
+            break;
+          }
+        }
+      }
+
+      // Load initial character stats if they exist
+      if (character.rows.length > 0) {
+        const charData = character.rows[0];
+        console.log('Loading character stats:', charData.stats);
+
+        if (charData.stats && charData.stats.baseStats) {
+          // Stats from leveling system
+          inventoryData.stats = charData.stats.baseStats;
+          console.log('Loaded baseStats:', inventoryData.stats);
+        } else if (charData.stats && charData.stats.characterStats) {
+          // Stats saved as characterStats in database
+          inventoryData.stats = charData.stats.characterStats;
+          console.log('Loaded characterStats:', inventoryData.stats);
+        } else if (charData.stats && typeof charData.stats === 'object') {
+          // Check if stats contains the character creation stats directly
+          const hasCharStats = charData.stats.strength !== undefined ||
+            charData.stats.dexterity !== undefined;
+
+          if (hasCharStats) {
+            // Initialize with character creation stats
+            inventoryData.stats = {
+              strength: charData.stats.strength || 0,
+              dexterity: charData.stats.dexterity || 0,
+              constitution: charData.stats.constitution || 0,
+              intelligence: charData.stats.intelligence || 0,
+              luck: charData.stats.luck || 0,
+              endurance: charData.stats.endurance || 0,
+              speed: charData.stats.speed || 0,
+              perception: charData.stats.perception || 0,
+              vitality: charData.stats.vitality || 0,
+              spirit: charData.stats.spirit || 0,
+              defense: charData.stats.defense || 0,
+              charisma: charData.stats.charisma || 0,
+              resilience: charData.stats.resilience || 0,
+              forging: charData.stats.forging || 0
+            };
+            console.log('Loaded character creation stats:', inventoryData.stats);
+          }
+        }
       }
 
       // Store inventory in server memory
@@ -296,6 +375,13 @@ io.on('connection', (socket) => {
 
       // Send initial inventory state to client
       socket.emit('inventory_updated', inventoryData);
+
+      // Send stats update
+      socket.emit('stats_updated', {
+        monstersKilled: inventoryData.monstersKilled,
+        deaths: inventoryData.deaths,
+        stats: inventoryData.stats
+      });
 
       const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
       const players = await pool.query('SELECT * FROM players WHERE game_id = $1', [data.gameId]);
@@ -351,7 +437,11 @@ io.on('connection', (socket) => {
       socket.emit('inventory_updated', {
         slots: inventory.slots,
         equipped: inventory.equipped,
-        gold: inventory.gold
+        gold: inventory.gold,
+        experience: inventory.experience || 0,
+        level: inventory.level || 1,
+        monstersKilled: inventory.monstersKilled || 0,
+        deaths: inventory.deaths || 0
       });
 
       console.log(`Player ${socket.playerName} picked up ${item.name}`);
@@ -393,7 +483,11 @@ io.on('connection', (socket) => {
     socket.emit('inventory_updated', {
       slots: inventory.slots,
       equipped: inventory.equipped,
-      gold: inventory.gold
+      gold: inventory.gold,
+      experience: inventory.experience || 0,
+      level: inventory.level || 1,
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths || 0
     });
 
     console.log(`Player ${socket.playerName} equipped ${item.name}`);
@@ -418,7 +512,11 @@ io.on('connection', (socket) => {
       socket.emit('inventory_updated', {
         slots: inventory.slots,
         equipped: inventory.equipped,
-        gold: inventory.gold
+        gold: inventory.gold,
+        experience: inventory.experience || 0,
+        level: inventory.level || 1,
+        monstersKilled: inventory.monstersKilled || 0,
+        deaths: inventory.deaths || 0
       });
 
       console.log(`Player ${socket.playerName} unequipped ${item.name}`);
@@ -446,7 +544,11 @@ io.on('connection', (socket) => {
     socket.emit('inventory_updated', {
       slots: inventory.slots,
       equipped: inventory.equipped,
-      gold: inventory.gold
+      gold: inventory.gold,
+      experience: inventory.experience || 0,
+      level: inventory.level || 1,
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths || 0
     });
 
     console.log(`Player ${socket.playerName} deleted ${item.name}`);
@@ -467,10 +569,138 @@ io.on('connection', (socket) => {
     socket.emit('inventory_updated', {
       slots: inventory.slots,
       equipped: inventory.equipped,
-      gold: inventory.gold
+      gold: inventory.gold,
+      experience: inventory.experience || 0,
+      level: inventory.level || 1,
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths || 0
     });
 
     console.log(`Player ${socket.playerName} gained ${amount} gold`);
+  });
+
+  socket.on('award_experience', async (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory || !socket.characterId) return;
+
+    const { amount } = data;
+
+    // Validate amount
+    if (typeof amount !== 'number' || amount <= 0) return;
+
+    // Initialize experience if not exists
+    if (!inventory.experience) inventory.experience = 0;
+    if (!inventory.level) inventory.level = 1;
+    if (!inventory.monstersKilled) inventory.monstersKilled = 0;
+
+    const oldLevel = inventory.level;
+    inventory.experience += amount;
+    inventory.monstersKilled += 1;
+
+    // Experience table for leveling
+    const EXPERIENCE_TABLE = [
+      0, 64, 77, 93, 113, 137, 166, 202, 244, 296,
+      359, 434, 526, 638, 772, 936, 1134, 1373, 1663, 2015,
+      2440, 2956, 3580, 4337, 5253, 6363, 7707, 9335, 11307, 13696,
+      16589, 20093, 24337, 29478, 35705, 43248, 52384, 63449, 76852, 93086,
+      112749, 136566, 165414, 200356, 242678, 293941, 356032, 431240, 522333, 632670,
+      766313, 928187, 1124254, 1361738, 1649388, 1997799, 2419809, 2930962, 3550089, 4300000,
+      4591991, 4903809, 5236802, 5592406, 5972158, 6377697, 6810774, 7273259, 7767149, 8294576,
+      8857818, 9459308, 10101641, 10787592, 11520122, 12302395, 13137788, 14029908, 14982607, 16000000,
+      17171217, 18428168, 19777129, 21224836, 22778517, 24445929, 26235397, 28155856, 30216894, 32428803,
+      34802626, 37350215, 40084291, 43018504, 46167504, 49547015, 53173909, 57066295, 61243609, 65726706,
+      70537971, 75701426, 81242851, 87189914, 93572308, 100421901, 107772891, 115661981, 124128562, 133214904,
+      142966377, 153431668, 164663029, 176716538, 189652377, 203535133, 218434121, 234423731, 251583798, 270000000,
+      298433158, 329860556, 364597510, 402992543, 445430880, 492338313, 544185474, 601492555, 664834531, 734846922,
+      812232179, 897766721, 992308735, 1096806779, 1212309302, 1339975165, 1481085263, 1637055384, 1809450405, 2000000000,
+      2297396709, 2639015821, 3031433133, 3482202253, 4000000000, 4594793419, 5278031643, 6062866266, 6964404506, 8000000000
+    ];
+
+    // Calculate new level
+    let newLevel = 1;
+    for (let i = EXPERIENCE_TABLE.length - 1; i >= 0; i--) {
+      if (inventory.experience >= EXPERIENCE_TABLE[i]) {
+        newLevel = i + 1;
+        break;
+      }
+    }
+
+    inventory.level = Math.min(newLevel, 150);
+
+    // Check if leveled up
+    if (inventory.level > oldLevel) {
+      const levelsGained = inventory.level - oldLevel;
+
+      // Distribute 10 random stat points per level across the 14 character stats
+      const statNames = ['strength', 'dexterity', 'constitution', 'intelligence', 'luck', 'endurance', 'speed', 'perception', 'vitality', 'spirit', 'defense', 'charisma', 'resilience', 'forging'];
+      const statGains = {};
+
+      for (let i = 0; i < levelsGained; i++) {
+        for (let j = 0; j < 10; j++) {
+          const randomStat = statNames[Math.floor(Math.random() * statNames.length)];
+          statGains[randomStat] = (statGains[randomStat] || 0) + 1;
+        }
+      }
+
+      // Apply stat gains to character stats
+      if (!inventory.stats) {
+        inventory.stats = {
+          strength: 0, dexterity: 0, constitution: 0, intelligence: 0,
+          luck: 0, endurance: 0, speed: 0, perception: 0,
+          vitality: 0, spirit: 0, defense: 0, charisma: 0,
+          resilience: 0, forging: 0
+        };
+      }
+
+      for (const [stat, gain] of Object.entries(statGains)) {
+        inventory.stats[stat] = (inventory.stats[stat] || 0) + gain;
+      }
+
+      // Broadcast level up
+      socket.emit('level_up', {
+        level: inventory.level,
+        levelsGained,
+        statGains,
+        totalStats: inventory.stats
+      });
+
+      console.log(`Player ${socket.playerName} leveled up to ${inventory.level}! Stat gains:`, statGains);
+    }
+
+    // Broadcast experience and stats update to client
+    socket.emit('experience_updated', {
+      experience: inventory.experience,
+      gained: amount,
+      level: inventory.level,
+      monstersKilled: inventory.monstersKilled
+    });
+
+    socket.emit('stats_updated', {
+      monstersKilled: inventory.monstersKilled,
+      deaths: inventory.deaths || 0,
+      stats: inventory.stats
+    });
+
+    console.log(`Player ${socket.playerName} gained ${amount} XP (Total: ${inventory.experience}, Level: ${inventory.level})`);
+  });
+
+  socket.on('player_death', () => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    // Initialize deaths if not exists
+    if (!inventory.deaths) inventory.deaths = 0;
+
+    inventory.deaths += 1;
+
+    // Broadcast stats update to client
+    socket.emit('stats_updated', {
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths,
+      stats: inventory.stats
+    });
+
+    console.log(`Player ${socket.playerName} died (Total deaths: ${inventory.deaths})`);
   });
 
   // ===== END INVENTORY HANDLERS =====
@@ -512,7 +742,12 @@ io.on('connection', (socket) => {
           [JSON.stringify({
             inventory: inventory.slots,
             equipped: inventory.equipped,
-            gold: inventory.gold
+            gold: inventory.gold,
+            experience: inventory.experience || 0,
+            level: inventory.level || 1,
+            monstersKilled: inventory.monstersKilled || 0,
+            deaths: inventory.deaths || 0,
+            characterStats: inventory.stats || null
           }), socket.characterId]
         );
         console.log(`✓ Saved inventory for character ${socket.characterId}`);
@@ -562,7 +797,12 @@ setInterval(async () => {
           [JSON.stringify({
             inventory: inventory.slots,
             equipped: inventory.equipped,
-            gold: inventory.gold
+            gold: inventory.gold,
+            experience: inventory.experience || 0,
+            level: inventory.level || 1,
+            monstersKilled: inventory.monstersKilled || 0,
+            deaths: inventory.deaths || 0,
+            characterStats: inventory.stats || null
           }), inventory.characterId]
         );
         console.log(`✓ Auto-saved inventory for character ${inventory.characterId}`);

@@ -3,8 +3,11 @@ class Inventory {
     this.game = game;
     this.socket = socket;
     this.isOpen = false;
+
+    // Read-only state (controlled by server)
     this.slots = Array(30).fill(null);
     this.gold = 0;
+    this.experience = 0;
 
     // Equipment slots
     this.equipped = {
@@ -29,6 +32,16 @@ class Inventory {
       this.slots = data.slots || Array(30).fill(null);
       this.equipped = data.equipped || { weapon: null, armor: null, helm: null, shield: null };
       this.gold = data.gold || 0;
+      this.experience = data.experience || 0;
+
+      if (this.isOpen) {
+        this.render();
+      }
+    });
+
+    this.socket.on('experience_updated', (data) => {
+      this.experience = data.experience || 0;
+      this.game.setMessage(`+${data.gained} XP! (Total: ${this.experience})`);
 
       if (this.isOpen) {
         this.render();

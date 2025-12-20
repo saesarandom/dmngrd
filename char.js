@@ -1,6 +1,6 @@
 const ALIGNMENTS = [
   'neutral',
-  'chaotic_good', 
+  'chaotic_good',
   'good',
   'chaotic_evil',
   'evil'
@@ -113,7 +113,7 @@ class CharacterCreation {
     this.class = null;
     this.step = 'name';
     this.error = '';
-    
+
     this.render();
   }
 
@@ -126,13 +126,13 @@ class CharacterCreation {
     const input = e.target.value;
     const filtered = input.replace(/[^a-zA-Z]/g, '').slice(0, 21);
     this.name = filtered;
-    
+
     if (filtered.length > 0 && filtered.length < 3) {
       this.error = 'Too short';
     } else {
       this.error = '';
     }
-    
+
     this.render();
   }
 
@@ -154,7 +154,7 @@ class CharacterCreation {
     this.class = className;
     const newStats = generateStarterStats();
     const randomAlignment = ALIGNMENTS[Math.floor(Math.random() * ALIGNMENTS.length)];
-    
+
     this.stats = newStats;
     this.alignment = randomAlignment;
     this.step = 'stats';
@@ -180,7 +180,7 @@ class CharacterCreation {
       classsk: classes[this.class].classsk,
       stats: this.stats
     };
-    
+
     if (this.onCharacterCreated) {
       this.onCharacterCreated(character);
     }
@@ -198,14 +198,14 @@ class CharacterCreation {
       margin-bottom: 6px;
       border: ${value > 0 ? '1px solid #4a7c3e' : '1px solid #333'};
     `;
-    
+
     const nameSpan = document.createElement('span');
     nameSpan.textContent = name;
     nameSpan.style.cssText = `
       text-transform: capitalize;
       color: ${value > 0 ? '#fff' : '#666'};
     `;
-    
+
     const valueSpan = document.createElement('span');
     valueSpan.textContent = value;
     valueSpan.style.cssText = `
@@ -214,7 +214,7 @@ class CharacterCreation {
       min-width: 30px;
       text-align: right;
     `;
-    
+
     div.appendChild(nameSpan);
     div.appendChild(valueSpan);
     return div;
@@ -222,7 +222,7 @@ class CharacterCreation {
 
   renderNameStep() {
     const isNameValid = this.validateName(this.name);
-    
+
     return `
       <div>
         <h1 style="text-align: center; margin-bottom: 10px; color: #4aff4a; font-size: 32px; text-shadow: 0 0 20px rgba(74, 255, 74, 0.5);">
@@ -261,7 +261,7 @@ class CharacterCreation {
     const raceButtons = Object.keys(races).map(raceName => {
       const race = races[raceName];
       const skills = race.racialsk.map(sk => `<div style="color: #888; font-size: 13px; margin-top: 5px;">• ${sk}</div>`).join('');
-      
+
       return `
         <button class="raceBtn" data-race="${raceName}" style="padding: 20px; background-color: #1a1a1a; border: 2px solid #333; border-radius: 4px; cursor: pointer; text-align: left; transition: all 0.3s;">
           <div style="color: #4aff4a; font-size: 18px; font-weight: bold; margin-bottom: 10px;">${race.name}</div>
@@ -269,7 +269,7 @@ class CharacterCreation {
         </button>
       `;
     }).join('');
-    
+
     return `
       <div>
         <h1 style="text-align: center; margin-bottom: 10px; color: #4aff4a; font-size: 32px;">
@@ -289,7 +289,7 @@ class CharacterCreation {
     const classButtons = Object.keys(classes).map(className => {
       const cls = classes[className];
       const skill = cls.classsk ? `<div style="color: #888; font-size: 13px; margin-top: 5px;">• ${cls.classsk}</div>` : '<div style="color: #666; font-size: 13px; margin-top: 5px; font-style: italic;">No class skill</div>';
-      
+
       return `
         <button class="classBtn" data-class="${className}" style="padding: 20px; background-color: #1a1a1a; border: 2px solid #333; border-radius: 4px; cursor: pointer; text-align: left; transition: all 0.3s;">
           <div style="color: #4aff4a; font-size: 18px; font-weight: bold; margin-bottom: 10px;">${cls.name}</div>
@@ -297,7 +297,7 @@ class CharacterCreation {
         </button>
       `;
     }).join('');
-    
+
     return `
       <div>
         <h1 style="text-align: center; margin-bottom: 10px; color: #4aff4a; font-size: 32px;">
@@ -315,7 +315,7 @@ class CharacterCreation {
 
   renderStatsStep() {
     const totalPoints = Object.values(this.stats).reduce((a, b) => a + b, 0);
-    
+
     return `
       <div>
         <h1 style="text-align: center; margin-bottom: 5px; color: #4aff4a; font-size: 28px;">
@@ -415,7 +415,7 @@ class CharacterCreation {
     if (this.step === 'name') {
       const input = document.getElementById('nameInput');
       const submitBtn = document.getElementById('nameSubmit');
-      
+
       input.addEventListener('input', (e) => this.handleNameChange(e));
       input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && this.validateName(this.name)) {
@@ -423,7 +423,7 @@ class CharacterCreation {
         }
       });
       input.focus();
-      
+
       submitBtn.addEventListener('click', () => this.handleNameSubmit());
       submitBtn.addEventListener('mouseenter', (e) => {
         if (this.validateName(this.name)) {

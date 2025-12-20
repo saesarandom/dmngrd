@@ -6,95 +6,95 @@ class Fight {
   }
 
   startFight(enemyX, enemyY) {
-  const enemyIndex = this.game.enemies.findIndex(e => e.x === enemyX && e.y === enemyY);
-  if (enemyIndex === -1) return;
-  
-  const enemy = this.game.enemies[enemyIndex];
-  
-  this.currentEnemy = enemy.monsterData || getRandomMonster();
-  
-  // Remove enemy from map
-  this.game.enemies.splice(enemyIndex, 1);
-  this.game.render();
-  
-  // Broadcast to other players
-  if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
-    this.game.lobby.socket.emit('map_event', {
-      gameName: this.game.lobby.gameName,
-      type: 'enemy_killed',
-      x: enemyX,
-      y: enemyY
-    });
+    const enemyIndex = this.game.enemies.findIndex(e => e.x === enemyX && e.y === enemyY);
+    if (enemyIndex === -1) return;
+
+    const enemy = this.game.enemies[enemyIndex];
+
+    this.currentEnemy = enemy.monsterData || getRandomMonster();
+
+    // Remove enemy from map
+    this.game.enemies.splice(enemyIndex, 1);
+    this.game.render();
+
+    // Broadcast to other players
+    if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
+      this.game.lobby.socket.emit('map_event', {
+        gameName: this.game.lobby.gameName,
+        type: 'enemy_killed',
+        x: enemyX,
+        y: enemyY
+      });
+    }
+
+    this.inFight = true;
+    this.resolveFight();
   }
-  
-  this.inFight = true;
-  this.resolveFight();
-}
 
   calculatePlayerPower() {
     const stats = this.game.character.stats;
     const inventory = this.game.inventory;
-    
+
     // Base stats
     let damage = stats.strength || 0;
     let defense = stats.defense || 0;
-     let blockChance = 0;
-    
+    let blockChance = 0;
+
     // Add weapon damage
     if (inventory.equipped.weapon) {
       damage += inventory.equipped.weapon.damage || 0;
     }
-    
+
     // Add armor defense
     if (inventory.equipped.armor) {
       defense += inventory.equipped.armor.defense || 0;
     }
-    
+
     if (inventory.equipped.shield) {
-    defense += inventory.equipped.shield.defense || 0;
-    blockChance += (inventory.equipped.shield.blockChance || 0) * 100; // Convert to percentage
-  }
-    
+      defense += inventory.equipped.shield.defense || 0;
+      blockChance += (inventory.equipped.shield.blockChance || 0) * 100; // Convert to percentage
+    }
+
     // Add helm defense
     if (inventory.equipped.helm) {
       defense += inventory.equipped.helm.defense || 0;
     }
-    
+
     // Calculate power: (defense * damage) / 2
     const blockMultiplier = blockChance > 0 ? 1 / (1 - blockChance / 100) : 1;
-  const power = (defense * damage) * blockMultiplier;
-    
+    const power = (defense * damage) * blockMultiplier;
+
     return power;
   }
 
   calculateEnemyPower() {
     if (!this.currentEnemy) return 0;
-    
+
     const damage = this.currentEnemy.damage;
     const defense = this.currentEnemy.defense;
     const blockChance = this.currentEnemy.block || 0;
-    
+
     // Same formula
     const blockMultiplier = blockChance > 0 ? 1 / (1 - blockChance / 100) : 1;
-  const power = (defense * damage) * blockMultiplier;
-    
+    const power = (defense * damage) * blockMultiplier;
+
     return power;
   }
 
   resolveFight() {
     const playerPower = this.calculatePlayerPower();
     const enemyPower = this.calculateEnemyPower();
-    
+
     const totalPower = playerPower + enemyPower;
     const winChance = totalPower > 0 ? playerPower / totalPower : 0.5;
-    
-  console.log('Player Power:', playerPower);
-  console.log('Enemy Power:', enemyPower);
-  console.log('Win Chance:', (winChance * 100).toFixed(1) + '%');
+
+    console.log('Player Power:', playerPower);
+    console.log('Enemy Power:', enemyPower);
+    console.log('Win Chance:', (winChance * 100).toFixed(1) + '%');
 
 
     const roll = Math.random();
-    
+
     if (roll < winChance) {
       // Player wins
       this.playerWins();
@@ -102,42 +102,71 @@ class Fight {
       // Player loses
       this.playerLoses();
     }
-    
+
     this.inFight = false;
     this.currentEnemy = null;
   }
 
   playerWins() {
-  const enemy = this.currentEnemy;
-  this.game.setMessage(`Victory! You defeated ${enemy.name}!`);
-  
-  // Generate loot
-  const drop = generateEnemyDrop();
-  
-  // Apply drops immediately, not in setTimeout
-  if (drop.type === 'gold') {
-    this.game.inventory.addGold(drop.amount);
-  } else if (drop.type === 'item') {
-    this.game.inventory.addItem(drop.item);
+    const enemy = this.currentEnemy;
+    this.game.setMessage(`Victory! You defeated ${enemy.name}!`);
+
+    // Award experience - provide default if missing
+    let experienceAmount = enemy.experience;
+
+    // If experience is missing or 0, assign default based on monster type
+    if (!experienceAmount) {
+      if (enemy.name === 'Rotten') {
+        experienceAmount = 11;
+      } else if (enemy.name === 'Fluffy Slime') {
+        experienceAmount = 14;
+      } else {
+        experienceAmount = 10; // Default fallback
+      }
+    }
+
+    if (experienceAmount > 0) {
+      this.game.socket.emit('award_experience', {
+        amount: experienceAmount
+      });
+    }
+
+    // Generate loot
+    const drop = generateEnemyDrop();
+
+    // Apply drops immediately, not in setTimeout
+    if (drop.type === 'gold') {
+      this.game.inventory.addGold(drop.amount);
+    } else if (drop.type === 'item') {
+      this.game.inventory.addItem(drop.item);
+    }
   }
-}
 
   playerLoses() {
     const enemy = this.currentEnemy;
     this.game.setMessage(`Defeat! ${enemy.name} has bested you in combat!`);
-    
+
+    // Track death
+    console.log('Player died, emitting player_death event');
+    if (this.game.socket && this.game.socket.connected) {
+      this.game.socket.emit('player_death', {});
+      console.log('player_death event emitted');
+    } else {
+      console.error('Socket not connected, cannot emit player_death');
+    }
+
     // Later: handle player death, respawn, etc.
     // For now, just display message
   }
 
   getFightInfo() {
     if (!this.inFight || !this.currentEnemy) return null;
-    
+
     const playerPower = this.calculatePlayerPower();
     const enemyPower = this.calculateEnemyPower();
     const totalPower = playerPower + enemyPower;
     const winChance = totalPower > 0 ? (playerPower / totalPower * 100).toFixed(1) : 50;
-    
+
     return {
       playerPower,
       enemyPower,

@@ -1,22 +1,20 @@
 // Fixed game generation with proper seed isolation
-function initializeGameWithSeed(seed) {
-  const rng = new Math.seedrandom(seed);
-  
+function initializeGameWithSeed(seed, gridSize = 30, mapType = 'wilderness') {
+  const rng = new Math.seedrandom(seed + '_' + mapType);
+
   const enemies = [];
   const traps = [];
   const shrines = [];
-  
-  const gridSize = 30;
-  
+
   // Generate enemies
   for (let y = 0; y < gridSize; y++) {
     for (let x = 0; x < gridSize; x++) {
-      if (rng() < 1/128) {
-        enemies.push({ x, y });
+      if (rng() < 1 / 128) {
+        enemies.push({ x, y, mapType });
       }
     }
   }
-  
+
   // Find empty cells
   const emptyCells = [];
   for (let y = 0; y < gridSize; y++) {
@@ -27,52 +25,54 @@ function initializeGameWithSeed(seed) {
       }
     }
   }
-  
+
   // Generate traps
   emptyCells.forEach(cell => {
-    if (rng() < 1/128) {
+    if (rng() < 1 / 128) {
       traps.push({ x: cell.x, y: cell.y });
     }
   });
-  
+
   // Generate shrines
   emptyCells.forEach(cell => {
     const hasTrap = traps.some(trap => trap.x === cell.x && trap.y === cell.y);
-    if (!hasTrap && rng() < 1/512) {
+    if (!hasTrap && rng() < 1 / 512) {
       shrines.push({ x: cell.x, y: cell.y });
     }
   });
-  
+
   // Safe spawn - first safe cell
-  const safeCells = emptyCells.filter(cell => 
+  const safeCells = emptyCells.filter(cell =>
     !traps.some(trap => trap.x === cell.x && trap.y === cell.y) &&
     !shrines.some(shrine => shrine.x === cell.x && shrine.y === cell.y)
   );
-  
+
   const playerSpawn = safeCells.length > 0 ? safeCells[0] : { x: 0, y: 0 };
-  
+
   return {
     enemies,
     traps,
     shrines,
-    playerSpawn
+    playerSpawn,
+    gridSize,
+    mapType
   };
 }
 
 // Initialize town with seed for consistent exits
 function initializeTownWithSeed(townName, width, height, seed) {
   const rng = new Math.seedrandom(seed + '_' + townName);
-  
+
   const buildings = [
     { x: 2, y: 2, width: 3, height: 3 },
     { x: 9, y: 9, width: 3, height: 3 }
   ];
-  
+
   const npcs = [
     { x: 3, y: 3, name: 'Merchant' },
     { x: 10, y: 10, name: 'Blacksmith' }
   ];
-  
+
   // Generate exit consistently
   const edge = Math.floor(rng() * 4);
   let exitX, exitY;
@@ -90,7 +90,7 @@ function initializeTownWithSeed(townName, width, height, seed) {
     exitX = 0;
     exitY = Math.floor(rng() * height);
   }
-  
+
   return {
     buildings,
     npcs,
