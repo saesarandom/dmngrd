@@ -59,12 +59,6 @@
       const character = JSON.parse(savedCharacter);
       const gameInfo = JSON.parse(savedGame);
       
-      console.log('=== PLAYER INIT ===');
-      console.log('Character:', character.name);
-      console.log('Game:', gameInfo.gameName);
-      console.log('Seed:', gameInfo.mapSeed);
-      console.log('Full gameInfo:', gameInfo);
-      
       const game = new Game(gameInfo.mapSeed);
       game.character = character;
       game.gameName = gameInfo.gameName;
@@ -83,28 +77,18 @@
       const skillSystem = new SkillSystem(game);
       game.skills = skillSystem;
       
-      // Broadcast initial location
-      socket.emit('update_location', {
-        gameName: gameInfo.gameName,
-        location: 'Skargnes'
-      });
-      
-      console.log('Setting up socket listeners...');
-
+      // Socket handlers
       socket.on('position_updated', (data) => {
-        let otherPlayer = game.otherPlayers.find(p => p.name === data.playerName);
+        if (data.playerName === character.name) return;
         
+        let otherPlayer = game.otherPlayers.find(p => p.name === data.playerName);
         if (!otherPlayer) {
-          // Create new entry if doesn't exist
           otherPlayer = { name: data.playerName, x: data.x, y: data.y };
           game.otherPlayers.push(otherPlayer);
-          console.log('Added new player to otherPlayers');
         } else {
-          // Update existing
           otherPlayer.x = data.x;
           otherPlayer.y = data.y;
         }
-        
         game.render();
       });
 
@@ -113,7 +97,6 @@
         if (otherPlayer) {
           otherPlayer.location = data.location;
         }
-        console.log(data.playerName + ' moved to ' + data.location);
       });
 
       socket.on('player_left', (data) => {
@@ -124,33 +107,38 @@
 
       socket.on('players_in_game', (players) => {
         game.otherPlayers = players.filter(p => p.name !== character.name);
-        console.log('Other players:', game.otherPlayers.length);
         game.render();
       });
 
       socket.on('new_player_joined', (player) => {
-        console.log('New player joined:', player.name);
-        if (!game.otherPlayers.find(p => p.name === player.name)) {
+        if (player.name !== character.name && !game.otherPlayers.find(p => p.name === player.name)) {
           game.otherPlayers.push(player);
           game.render();
         }
       });
 
-      // Both creator and joiner need to join room
       socket.on('connect', () => {
-        socket.emit('join_game', {
-          gameId: gameInfo.id,
-          password: gameInfo.password || '',
-          player: {
-            name: character.name,
-            class: character.class,
-            race: character.race,
-            level: character.level,
-            x: 6,
-            y: 1
-          }
-        });
-      });
+  socket.emit('join_game', {
+    gameId: gameInfo.id,
+    password: gameInfo.password || '',
+    player: {
+      name: character.name,
+      class: character.class,
+      race: character.race,
+      level: character.level,
+      x: 6,
+      y: 1
+    }
+  });
+  
+  // Broadcast initial location
+  const location = game.inTown && game.currentTown ? game.currentTown.name : 'wilderness';
+  socket.emit('update_location', {
+    gameId: gameInfo.id,
+    playerName: character.name,
+    location: location
+  });
+});
       
       // Initialize town
       const skargnes = createSkargnes(game, gameInfo.mapSeed);

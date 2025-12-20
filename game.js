@@ -144,14 +144,7 @@ class Game {
   }
 
   updateOtherPlayers(players) {
-    const currentLocation = this.inTown && this.currentTown 
-      ? this.currentTown.name 
-      : 'wilderness';
-    
-    this.otherPlayers = players.filter(p => 
-      p.name !== this.character.name && 
-      p.location === currentLocation
-    );
+    this.otherPlayers = players.filter(p => p.name !== this.character.name);
     this.render();
   }
 
@@ -159,13 +152,12 @@ class Game {
     const px = x * this.cellSize;
     const py = y * this.cellSize;
     
-    // this.ctx.fillStyle = '#4a9eff';
-    // this.ctx.fillRect(px + 6, py + 6, this.cellSize - 12, this.cellSize - 12);
+
     
-    // this.ctx.fillStyle = '#4a9eff';
-    this.ctx.font = '10px Arial';
+    this.ctx.fillStyle = 'yellow';
+    this.ctx.font = '13px Arial';
     this.ctx.textAlign = 'center';
-    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);s
+    this.ctx.fillText(playerName, px + this.cellSize / 2, py - 5);
   }
 
   drawPlayer(x, y) {
@@ -201,6 +193,11 @@ class Game {
       this.ctx.fillStyle = '#4aff4a';
       this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
     }
+
+    this.ctx.fillStyle = '#4aff4a';
+    this.ctx.font = '13px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(this.character.name, px + this.cellSize / 2, py - 5);
   }
 
   drawItemIcon(item, x, y, width, height) {
@@ -286,7 +283,17 @@ class Game {
       });
     }
 
-    this.otherPlayers.forEach(player => {
+    // Filter players by current location
+    const currentLocation = this.inTown && this.currentTown 
+      ? this.currentTown.name 
+      : 'wilderness';
+    
+    const visiblePlayers = this.otherPlayers.filter(p => {
+      const playerLocation = p.location || 'Skargnes';
+      return playerLocation === currentLocation;
+    });
+
+    visiblePlayers.forEach(player => {
       this.drawOtherPlayer(player.x, player.y, player.name);
     });
 

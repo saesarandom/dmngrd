@@ -108,20 +108,19 @@ class Fight {
   }
 
   playerWins() {
-    const enemy = this.currentEnemy;
-    this.game.setMessage(`Victory! You defeated ${enemy.name}!`);
-    
-    // Generate loot
-    const drop = generateEnemyDrop();
-    
-    setTimeout(() => {
-      if (drop.type === 'gold') {
-        this.game.inventory.addGold(drop.amount);
-      } else if (drop.type === 'item') {
-        this.game.inventory.addItem(drop.item);
-      }
-    }, 1000);
+  const enemy = this.currentEnemy;
+  this.game.setMessage(`Victory! You defeated ${enemy.name}!`);
+  
+  // Generate loot
+  const drop = generateEnemyDrop();
+  
+  // Apply drops immediately, not in setTimeout
+  if (drop.type === 'gold') {
+    this.game.inventory.addGold(drop.amount);
+  } else if (drop.type === 'item') {
+    this.game.inventory.addItem(drop.item);
   }
+}
 
   playerLoses() {
     const enemy = this.currentEnemy;
