@@ -1,6 +1,7 @@
 class Inventory {
-  constructor(game) {
+  constructor(game, socket) {
     this.game = game;
+    this.socket = socket;
     this.isOpen = false;
     this.slots = Array(30).fill(null);
     this.gold = 0;
@@ -19,17 +20,24 @@ class Inventory {
 
     this.setupEventListeners();
     this.createInventoryUI();
-
-    // Load starter gear
-    this.loadStarterGear();
+    this.setupSocketListeners();
   }
 
-  loadStarterGear() {
-    const starterGear = getStarterGear(this.game.character.class);
-    this.equipped.weapon = starterGear.weapon;
-    this.equipped.armor = starterGear.armor;
-    this.equipped.helm = starterGear.helm;
-    this.equipped.shield = starterGear.shield;
+  setupSocketListeners() {
+    // Listen for inventory updates from server
+    this.socket.on('inventory_updated', (data) => {
+      this.slots = data.slots || Array(30).fill(null);
+      this.equipped = data.equipped || { weapon: null, armor: null, helm: null, shield: null };
+      this.gold = data.gold || 0;
+
+      if (this.isOpen) {
+        this.render();
+      }
+    });
+
+    this.socket.on('inventory_full', () => {
+      this.game.setMessage('Inventory is full!');
+    });
   }
 
   setupEventListeners() {
@@ -171,70 +179,29 @@ class Inventory {
   }
 
   addItem(item) {
-    const emptySlot = this.slots.findIndex(slot => slot === null);
-    if (emptySlot !== -1) {
-      this.slots[emptySlot] = item;
-      this.game.setMessage(`Picked up: ${item.name}`);
-      if (this.isOpen) this.render();
-      return true;
-    } else {
-      this.game.setMessage('Inventory is full!');
-      return false;
-    }
+    // Emit to server instead of modifying directly
+    this.socket.emit('inventory_pickup_item', { item });
+    this.game.setMessage(`Picking up: ${item.name}`);
   }
 
   addGold(amount) {
-    this.gold += amount;
-    this.game.setMessage(`Picked up ${amount} Crownel`);
-    if (this.isOpen) this.render();
+    // Emit to server instead of modifying directly
+    this.socket.emit('inventory_add_gold', { amount });
+    this.game.setMessage(`Picking up ${amount} Crownel`);
   }
 
   equipItem(item, slotType) {
-    this.equipped[slotType] = item;
-    if (this.isOpen) this.render();
+    // This method is deprecated - use swapEquipment instead
+    // Kept for compatibility
   }
 
   unequipItem(slotType) {
-    const item = this.equipped[slotType];
-    if (!item) return;
-
-    // Find empty slot in inventory
-    const emptySlot = this.slots.findIndex(slot => slot === null);
-    if (emptySlot !== -1) {
-      this.slots[emptySlot] = item;
-      this.equipped[slotType] = null;
-      this.game.setMessage(`Unequipped: ${item.name}`);
-      if (this.isOpen) this.render();
-      return true;
-    } else {
-      this.game.setMessage('Inventory is full! Cannot unequip.');
-      return false;
-    }
+    // Emit to server instead of modifying directly
+    this.socket.emit('inventory_unequip_item', { slotType });
   }
 
   swapEquipment(inventoryIndex) {
-    const item = this.slots[inventoryIndex];
-    if (!item) return;
-
-    // Determine slot type from item
-    let slotType = null;
-    if (item.type === 'weapon') slotType = 'weapon';
-    else if (item.type === 'armor') slotType = 'armor';
-    else if (item.type === 'helm') slotType = 'helm';
-    else if (item.type === 'shield') slotType = 'shield';
-
-    if (!slotType) {
-      this.game.setMessage('This item cannot be equipped');
-      return;
-    }
-
-    // Swap: put current equipped item back to inventory, equip new item
-    const oldItem = this.equipped[slotType];
-    this.equipped[slotType] = item;
-    this.slots[inventoryIndex] = oldItem; // Can be null if nothing was equipped
-
-    this.game.setMessage(`Equipped: ${item.name}`);
-    if (this.isOpen) this.render();
+    this.socket.emit('inventory_equip_item', { inventoryIndex });
   }
 
   deleteItem(inventoryIndex) {
@@ -242,9 +209,8 @@ class Inventory {
     if (!item) return;
 
     if (confirm(`Delete ${item.name}? This cannot be undone.`)) {
-      this.slots[inventoryIndex] = null;
-      this.game.setMessage(`Deleted: ${item.name}`);
-      if (this.isOpen) this.render();
+      // Emit to server instead of modifying directly
+      this.socket.emit('inventory_delete_item', { inventoryIndex });
     }
   }
 

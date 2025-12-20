@@ -150,15 +150,8 @@
       game.socket = socket;
       game.otherPlayers = gameInfo.players || [];
 
-      const inventory = new Inventory(game);
+      const inventory = new Inventory(game, socket);
       game.inventory = inventory;
-
-      // Load saved inventory/equipment if exists
-      if (character.stats && character.stats.inventory) {
-        game.inventory.slots = character.stats.inventory || Array(30).fill(null);
-        game.inventory.equipped = character.stats.equipped || { weapon: null, armor: null, helm: null, shield: null };
-        game.inventory.gold = character.stats.gold || 0;
-      }
 
       const movement = new Movement(game);
       const simulator = new Simulator(game, movement);
@@ -235,45 +228,6 @@
           location: 'Skargnes'
         });
       });
-
-      // Auto-save function
-      function saveCharacterData() {
-        const characterData = {
-          inventory: game.inventory.slots,
-          equipped: game.inventory.equipped,
-          gold: game.inventory.gold
-        };
-
-        fetch(`${protocol}://${host}/characters/${character.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            stats: characterData
-          }),
-          keepalive: true
-        })
-          .then(response => response.json())
-          .then(data => {
-            console.log('Character data saved');
-          })
-          .catch(err => {
-            console.error('Error saving character data:', err);
-          });
-      }
-
-      // Auto-save every 10 minutes (600000 ms)
-      setInterval(() => {
-        saveCharacterData();
-        game.setMessage('Progress auto-saved');
-      }, 600000);
-
-      // Initial save after 1 minute
-      setTimeout(() => {
-        saveCharacterData();
-        game.setMessage('Progress saved');
-      }, 60000);
 
 
       // Handle page refresh/close - immediate cleanup

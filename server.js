@@ -29,6 +29,10 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
+// Server-authoritative inventory state (in-memory)
+// Key: socket.id, Value: { slots: [], equipped: {}, gold: number, characterId: number }
+const playerInventories = new Map();
+
 async function initDB() {
   try {
     await pool.query(`
@@ -263,6 +267,36 @@ io.on('connection', (socket) => {
       socket.gameId = data.gameId;
       socket.playerName = data.player.name;
 
+      // Load character inventory from database
+      const character = await pool.query(
+        'SELECT * FROM characters WHERE name = $1',
+        [data.player.name]
+      );
+
+      let inventoryData = {
+        slots: Array(30).fill(null),
+        equipped: { weapon: null, armor: null, helm: null, shield: null },
+        gold: 0
+      };
+
+      if (character.rows.length > 0 && character.rows[0].stats) {
+        const stats = character.rows[0].stats;
+        if (stats.inventory) inventoryData.slots = stats.inventory;
+        if (stats.equipped) inventoryData.equipped = stats.equipped;
+        if (stats.gold !== undefined) inventoryData.gold = stats.gold;
+
+        socket.characterId = character.rows[0].id;
+      }
+
+      // Store inventory in server memory
+      playerInventories.set(socket.id, {
+        ...inventoryData,
+        characterId: socket.characterId
+      });
+
+      // Send initial inventory state to client
+      socket.emit('inventory_updated', inventoryData);
+
       const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
       const players = await pool.query('SELECT * FROM players WHERE game_id = $1', [data.gameId]);
 
@@ -300,6 +334,148 @@ io.on('connection', (socket) => {
     });
   });
 
+  // ===== SERVER-AUTHORITATIVE INVENTORY HANDLERS =====
+
+  socket.on('inventory_pickup_item', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { item } = data;
+
+    // Find empty slot
+    const emptySlotIndex = inventory.slots.findIndex(slot => slot === null);
+    if (emptySlotIndex !== -1) {
+      inventory.slots[emptySlotIndex] = item;
+
+      // Broadcast updated inventory to client
+      socket.emit('inventory_updated', {
+        slots: inventory.slots,
+        equipped: inventory.equipped,
+        gold: inventory.gold
+      });
+
+      console.log(`Player ${socket.playerName} picked up ${item.name}`);
+    } else {
+      socket.emit('inventory_full');
+    }
+  });
+
+  socket.on('inventory_equip_item', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { inventoryIndex } = data;
+
+    // Validate slot index
+    if (inventoryIndex < 0 || inventoryIndex >= 30) return;
+
+    const item = inventory.slots[inventoryIndex];
+    if (!item) return;
+
+    // Determine slot type
+    let slotType = null;
+    if (item.type === 'weapon') slotType = 'weapon';
+    else if (item.type === 'armor') slotType = 'armor';
+    else if (item.type === 'helm') slotType = 'helm';
+    else if (item.type === 'shield') slotType = 'shield';
+
+    if (!slotType) {
+      socket.emit('error', { message: 'Item cannot be equipped' });
+      return;
+    }
+
+    // Swap: put current equipped item back to inventory, equip new item
+    const oldItem = inventory.equipped[slotType];
+    inventory.equipped[slotType] = item;
+    inventory.slots[inventoryIndex] = oldItem; // Can be null
+
+    // Broadcast updated inventory
+    socket.emit('inventory_updated', {
+      slots: inventory.slots,
+      equipped: inventory.equipped,
+      gold: inventory.gold
+    });
+
+    console.log(`Player ${socket.playerName} equipped ${item.name}`);
+  });
+
+  socket.on('inventory_unequip_item', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { slotType } = data;
+
+    const item = inventory.equipped[slotType];
+    if (!item) return;
+
+    // Find empty slot in inventory
+    const emptySlotIndex = inventory.slots.findIndex(slot => slot === null);
+    if (emptySlotIndex !== -1) {
+      inventory.slots[emptySlotIndex] = item;
+      inventory.equipped[slotType] = null;
+
+      // Broadcast updated inventory
+      socket.emit('inventory_updated', {
+        slots: inventory.slots,
+        equipped: inventory.equipped,
+        gold: inventory.gold
+      });
+
+      console.log(`Player ${socket.playerName} unequipped ${item.name}`);
+    } else {
+      socket.emit('inventory_full');
+    }
+  });
+
+  socket.on('inventory_delete_item', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { inventoryIndex } = data;
+
+    // Validate slot index
+    if (inventoryIndex < 0 || inventoryIndex >= 30) return;
+
+    const item = inventory.slots[inventoryIndex];
+    if (!item) return;
+
+    // Delete item
+    inventory.slots[inventoryIndex] = null;
+
+    // Broadcast updated inventory
+    socket.emit('inventory_updated', {
+      slots: inventory.slots,
+      equipped: inventory.equipped,
+      gold: inventory.gold
+    });
+
+    console.log(`Player ${socket.playerName} deleted ${item.name}`);
+  });
+
+  socket.on('inventory_add_gold', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { amount } = data;
+
+    // Validate amount
+    if (typeof amount !== 'number' || amount <= 0) return;
+
+    inventory.gold += amount;
+
+    // Broadcast updated inventory
+    socket.emit('inventory_updated', {
+      slots: inventory.slots,
+      equipped: inventory.equipped,
+      gold: inventory.gold
+    });
+
+    console.log(`Player ${socket.playerName} gained ${amount} gold`);
+  });
+
+  // ===== END INVENTORY HANDLERS =====
+
+
   // Handle explicit leave_game event (from beforeunload)
   socket.on('leave_game', async (data) => {
     try {
@@ -327,6 +503,27 @@ io.on('connection', (socket) => {
   socket.on('disconnect', async () => {
     console.log('✗ Disconnected:', socket.id);
 
+    // Save inventory to database before cleanup
+    const inventory = playerInventories.get(socket.id);
+    if (inventory && socket.characterId) {
+      try {
+        await pool.query(
+          'UPDATE characters SET stats = $1 WHERE id = $2',
+          [JSON.stringify({
+            inventory: inventory.slots,
+            equipped: inventory.equipped,
+            gold: inventory.gold
+          }), socket.characterId]
+        );
+        console.log(`✓ Saved inventory for character ${socket.characterId}`);
+      } catch (err) {
+        console.error('Error saving inventory on disconnect:', err.message);
+      }
+    }
+
+    // Clean up player inventory from memory
+    playerInventories.delete(socket.id);
+
     // Clean up player if they were in a game
     if (socket.gameId && socket.playerName) {
       try {
@@ -352,6 +549,29 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// Auto-save all player inventories every 10 minutes
+setInterval(async () => {
+  console.log('Running auto-save for all players...');
+
+  for (const [socketId, inventory] of playerInventories.entries()) {
+    if (inventory.characterId) {
+      try {
+        await pool.query(
+          'UPDATE characters SET stats = $1 WHERE id = $2',
+          [JSON.stringify({
+            inventory: inventory.slots,
+            equipped: inventory.equipped,
+            gold: inventory.gold
+          }), inventory.characterId]
+        );
+        console.log(`✓ Auto-saved inventory for character ${inventory.characterId}`);
+      } catch (err) {
+        console.error('Error auto-saving inventory:', err.message);
+      }
+    }
+  }
+}, 600000); // 10 minutes
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
