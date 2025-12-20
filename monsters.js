@@ -68,7 +68,7 @@ const FluffySlimePrototype = {
   defense: 2,
   block: 0,
   hp: 14,
-  color: '#4aff4a',
+  color: '#ff4a4a',
   experience: 14,
   resistances: {
     physical: 0,
@@ -93,7 +93,7 @@ const ArmedVillagerPrototype = {
   defense: 3,
   block: 10,
   hp: 20,
-  color: '#ff8c00',
+  color: '#ff4a4a',
   experience: 24,
   resistances: {
     physical: 0.05,

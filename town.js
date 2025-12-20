@@ -51,6 +51,7 @@ class Town {
     this.game.enemies = mapData.enemies;
     this.game.traps = mapData.traps;
     this.game.shrines = mapData.shrines;
+    this.game.exits = mapData.exits || [];
     this.game.player = mapData.playerSpawn;
 
     this.game.player = {

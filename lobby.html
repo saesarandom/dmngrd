@@ -1,36 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Game Lobby</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Arial; background-color: #0a0a0a; color: #fff; padding: 20px; }
-    .container { max-width: 900px; margin: 0 auto; }
-    h1 { color: #4aff4a; margin-bottom: 20px; }
-    .status { padding: 10px; background-color: #1a1a1a; border-left: 3px solid #ff4a4a; margin-bottom: 20px; }
-    .status.connected { border-left-color: #4aff4a; }
-    .games { display: grid; gap: 15px; margin-bottom: 30px; }
-    .game-card { background-color: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 15px; }
-    .game-card h3 { color: #4aff4a; margin-bottom: 10px; }
-    .game-card p { color: #888; font-size: 14px; margin: 5px 0; }
-    button { padding: 10px 20px; background-color: #4a7c3e; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background-color: #5a8c4e; }
-    button:disabled { background-color: #333; cursor: not-allowed; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; }
-    .modal.active { display: flex; }
-    .modal-content { background-color: #1a1a1a; border: 2px solid #4a7c3e; border-radius: 8px; padding: 30px; width: 400px; }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; color: #888; font-size: 12px; margin-bottom: 5px; }
-    .form-group input { width: 100%; padding: 10px; background-color: #0a0a0a; border: 1px solid #333; border-radius: 4px; color: #fff; }
-    .form-buttons { display: flex; gap: 10px; }
-    .form-buttons button { flex: 1; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial;
+      background-color: #0a0a0a;
+      color: #fff;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #4aff4a;
+      margin-bottom: 20px;
+    }
+
+    .status {
+      padding: 10px;
+      background-color: #1a1a1a;
+      border-left: 3px solid #ff4a4a;
+      margin-bottom: 20px;
+    }
+
+    .status.connected {
+      border-left-color: #4aff4a;
+    }
+
+    .games {
+      display: grid;
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .game-card {
+      background-color: #000000;
+      border: 1px solid #000000;
+      border-radius: 4px;
+      padding: 15px;
+    }
+
+    .game-card h3 {
+      background: linear-gradient(72deg, #741c59, #b1ce10);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    .game-card p {
+      color: #e0e0e0;
+      background-color: #000000;
+      font-size: 14px;
+      margin: 5px 0;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #4a7c3e;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #5a8c4e;
+    }
+
+    button:disabled {
+      background-color: #333;
+      cursor: not-allowed;
+
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background-color: #000000;
+      border: 2px solid #1b1b1b;
+      border-radius: 8px;
+      padding: 30px;
+      width: 400px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-group label {
+      display: block;
+      color: #000000;
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      background-color: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #fff;
+    }
+
+    .form-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .form-buttons button {
+      flex: 1;
+    }
   </style>
 </head>
+
 <body>
   <div class="container">
-    <h1>Game Lobby</h1>
+    <h1
+      style="background: linear-gradient(45deg, #66379b, #07d6d6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+      Game Lobby</h1>
     <div id="status" class="status">● Connecting...</div>
 
     <button id="createBtn">+ Create Game</button>
@@ -42,7 +159,9 @@
   <!-- Create Game Modal -->
   <div id="createModal" class="modal">
     <div class="modal-content">
-      <h2 style="color: #4aff4a; margin-bottom: 20px;">Create Game</h2>
+      <h2
+        style="background: linear-gradient(45deg, #66379b, #07d6d6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 20px;">
+        Create Game</h2>
       <div class="form-group">
         <label>Game Name</label>
         <input type="text" id="gameName" placeholder="e.g. Adventure #1" maxlength="30">
@@ -215,7 +334,7 @@
     function joinGame(gameId, hasPassword) {
       const numGameId = parseInt(gameId);
       const game = games.find(g => parseInt(g.id) === numGameId);
-      
+
       if (!game) {
         console.error('Game not found:', gameId);
         return;
@@ -244,4 +363,5 @@
     document.getElementById('createBtn').addEventListener('click', openModal);
   </script>
 </body>
+
 </html>

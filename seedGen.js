@@ -49,14 +49,49 @@ function initializeGameWithSeed(seed, gridSize = 30, mapType = 'wilderness') {
 
   const playerSpawn = safeCells.length > 0 ? safeCells[0] : { x: 0, y: 0 };
 
+  // Generate exit portal on edge for wilderness maps
+  const exits = [];
+  if (mapType === 'wilderness' || mapType === 'outer_plains') {
+    const rng2 = new Math.seedrandom(seed + '_exit_' + mapType);
+    const edge = Math.floor(rng2() * 4);
+    let exitX, exitY;
+
+    if (edge === 0) { // Top
+      exitX = Math.floor(rng2() * gridSize);
+      exitY = 0;
+    } else if (edge === 1) { // Right
+      exitX = gridSize - 1;
+      exitY = Math.floor(rng2() * gridSize);
+    } else if (edge === 2) { // Bottom
+      exitX = Math.floor(rng2() * gridSize);
+      exitY = gridSize - 1;
+    } else { // Left
+      exitX = 0;
+      exitY = Math.floor(rng2() * gridSize);
+    }
+
+    const nextMap = getNextMapType(mapType);
+    exits.push({ x: exitX, y: exitY, nextMap });
+  }
+
   return {
     enemies,
     traps,
     shrines,
     playerSpawn,
     gridSize,
-    mapType
+    mapType,
+    exits
   };
+}
+
+function getNextMapType(currentMap) {
+  if (currentMap === 'wilderness') {
+    return { gridSize: 34, mapType: 'outer_plains', displayName: 'Outer Plains' };
+  } else if (currentMap === 'outer_plains') {
+    return { gridSize: 38, mapType: 'deep_forest', displayName: 'Deep Forest' };
+  }
+  return { gridSize: 30, mapType: 'wilderness', displayName: 'Wilderness' };
 }
 
 // Initialize town with seed for consistent exits

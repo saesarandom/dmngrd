@@ -205,6 +205,14 @@
         game.render();
       });
 
+      socket.on('equipment_changed', (data) => {
+        const player = game.otherPlayers.find(p => p.name === data.playerName);
+        if (player) {
+          player.equipment = data.equipment;
+          game.render();
+        }
+      });
+
       socket.on('new_player_joined', (player) => {
         if (player.name !== character.name && !game.otherPlayers.find(p => p.name === player.name)) {
           game.otherPlayers.push(player);

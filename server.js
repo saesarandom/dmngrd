@@ -388,10 +388,22 @@ io.on('connection', (socket) => {
 
       io.emit('games_updated', games.rows);
 
-      const othersForThisPlayer = players.rows.filter(p => p.name !== data.player.name);
+      const othersForThisPlayer = players.rows.filter(p => p.name !== data.player.name).map(p => {
+        const inventory = playerInventories.get(p.socket_id);
+        return {
+          ...p,
+          equipment: inventory ? inventory.equipped : {}
+        };
+      });
       socket.emit('players_in_game', othersForThisPlayer);
 
-      const othersInRoom = players.rows.filter(p => p.socket_id !== socket.id);
+      const othersInRoom = players.rows.filter(p => p.socket_id !== socket.id).map(p => {
+        const inventory = playerInventories.get(p.socket_id);
+        return {
+          ...p,
+          equipment: inventory ? inventory.equipped : {}
+        };
+      });
       socket.to(`game_${data.gameId}`).emit('players_in_game', othersInRoom);
 
       socket.emit('game_joined', { ...game.rows[0], players: players.rows });
@@ -490,6 +502,12 @@ io.on('connection', (socket) => {
       deaths: inventory.deaths || 0
     });
 
+    // Broadcast equipment change to other players
+    socket.broadcast.emit('equipment_changed', {
+      playerName: socket.playerName,
+      equipment: inventory.equipped
+    });
+
     console.log(`Player ${socket.playerName} equipped ${item.name}`);
   });
 
@@ -517,6 +535,12 @@ io.on('connection', (socket) => {
         level: inventory.level || 1,
         monstersKilled: inventory.monstersKilled || 0,
         deaths: inventory.deaths || 0
+      });
+
+      // Broadcast equipment change to other players
+      socket.broadcast.emit('equipment_changed', {
+        playerName: socket.playerName,
+        equipment: inventory.equipped
       });
 
       console.log(`Player ${socket.playerName} unequipped ${item.name}`);
