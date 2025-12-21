@@ -39,6 +39,7 @@ class Monster {
 const RottenPrototype = {
   id: 'rotten',
   name: 'Rotten',
+  level: 1,
   damage: 1,
   defense: 2,
   block: 5,
@@ -64,6 +65,7 @@ const RottenPrototype = {
 const FluffySlimePrototype = {
   id: 'fluffy_slime',
   name: 'Fluffy Slime',
+  level: 2,
   damage: 2,
   defense: 2,
   block: 0,
@@ -89,6 +91,7 @@ const FluffySlimePrototype = {
 const ArmedVillagerPrototype = {
   id: 'armed_villager',
   name: 'Armed Villager',
+  level: 3,
   damage: 3,
   defense: 3,
   block: 10,
@@ -111,14 +114,55 @@ const ArmedVillagerPrototype = {
   }
 };
 
+const FamiliarPrototype = {
+  id: 'familiar',
+  name: 'Familiar',
+  level: 5,
+  damage: 4,
+  defense: 4,
+  block: 10,
+  hp: 36,
+  color: '#ff4a4a',
+  experience: 39,
+  resistances: {
+    physical: 0,
+    fire: 0.1,
+    cold: 0,
+    lightning: 0,
+    poison: 0,
+    magic: 0,
+    curse: 0,
+    dot: 0,
+  },
+  drops: {
+    goldMin: 18,
+    goldMax: 29
+  }
+};
+
 function createMonster(prototype) {
   return new Monster(JSON.parse(JSON.stringify(prototype)));
+}
+
+// Zone level definitions
+const ZONE_LEVELS = {
+  'wilderness': 1,
+  'outer_plains': 3,
+  'deep_forest': 5,
+  'mountain_pass': 7,
+  'dark_caverns': 10
+};
+
+function getZoneLevel(mapType) {
+  return ZONE_LEVELS[mapType] || 1;
 }
 
 function getRandomMonster(mapType = 'wilderness') {
   let monsters;
 
-  if (mapType === 'outer_plains') {
+  if (mapType === 'deep_forest') {
+    monsters = [FamiliarPrototype];
+  } else if (mapType === 'outer_plains') {
     monsters = [ArmedVillagerPrototype];
   } else {
     // wilderness or default

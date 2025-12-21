@@ -13,19 +13,12 @@ class Fight {
 
     this.currentEnemy = enemy.monsterData || getRandomMonster();
 
+    // Store enemy position for later
+    this.currentEnemyPos = { x: enemyX, y: enemyY };
+
     // Remove enemy from map
     this.game.enemies.splice(enemyIndex, 1);
     this.game.render();
-
-    // Broadcast to other players
-    if (this.game.lobby && this.game.lobby.socket && this.game.lobby.gameName) {
-      this.game.lobby.socket.emit('map_event', {
-        gameName: this.game.lobby.gameName,
-        type: 'enemy_killed',
-        x: enemyX,
-        y: enemyY
-      });
-    }
 
     this.inFight = true;
     this.resolveFight();
@@ -125,9 +118,19 @@ class Fight {
       }
     }
 
-    if (experienceAmount > 0) {
-      this.game.socket.emit('award_experience', {
-        amount: experienceAmount
+    // Broadcast monster kill with monster data for party exp sharing
+    if (this.game.socket && this.game.gameId && this.currentEnemyPos) {
+      this.game.socket.emit('map_event', {
+        gameId: this.game.gameId,
+        type: 'enemy_killed',
+        x: this.currentEnemyPos.x,
+        y: this.currentEnemyPos.y,
+        location: this.game.currentLocation || 'wilderness',
+        monsterData: {
+          name: enemy.name,
+          level: enemy.level || 1,
+          experience: experienceAmount
+        }
       });
     }
 

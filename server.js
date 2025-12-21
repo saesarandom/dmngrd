@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const path = require('path');
+const { calculatePartyExperience } = require('./partyExp');
 require('dotenv').config();
 
 const app = express();
@@ -32,6 +33,79 @@ const pool = new Pool({
 // Server-authoritative inventory state (in-memory)
 // Key: socket.id, Value: { slots: [], equipped: {}, gold: number, characterId: number }
 const playerInventories = new Map();
+
+// Party state tracking (in-memory)
+// Key: gameName, Value: Map of partyId -> { members: [playerNames], leader: playerName }
+const gameParties = new Map();
+
+// Auto-cleanup games every hour
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+setInterval(async () => {
+  try {
+    console.log('[Auto Cleanup] Starting hourly game cleanup...');
+
+    // Get all games
+    const games = await pool.query('SELECT id, name FROM games');
+
+    for (const game of games.rows) {
+      // Get all players in this game
+      const players = await pool.query(
+        'SELECT socket_id, name FROM players WHERE game_id = $1',
+        [game.id]
+      );
+
+      console.log(`[Auto Cleanup] Cleaning game "${game.name}" (${players.rows.length} players)`);
+
+      // Save and kick each player
+      for (const player of players.rows) {
+        const inventory = playerInventories.get(player.socket_id);
+        if (inventory) {
+          // Save inventory to database
+          await pool.query(
+            'UPDATE characters SET inventory = $1, gold = $2, level = $3, experience = $4, deaths = $5, monsters_killed = $6 WHERE id = $7',
+            [
+              JSON.stringify(inventory.slots || []),
+              inventory.gold || 0,
+              inventory.level || 1,
+              inventory.experience || 0,
+              inventory.deaths || 0,
+              inventory.monstersKilled || 0,
+              inventory.characterId
+            ]
+          );
+          console.log(`[Auto Cleanup] Saved inventory for ${player.name}`);
+        }
+
+        // Get socket and redirect to lobby
+        const socket = io.sockets.sockets.get(player.socket_id);
+        if (socket) {
+          socket.emit('force_lobby', {
+            message: 'Game has been automatically cleaned up. Returning to lobby...'
+          });
+          console.log(`[Auto Cleanup] Kicked ${player.name} to lobby`);
+        }
+
+        // Remove from playerInventories
+        playerInventories.delete(player.socket_id);
+      }
+
+      // Delete all players from this game
+      await pool.query('DELETE FROM players WHERE game_id = $1', [game.id]);
+
+      // Delete the game
+      await pool.query('DELETE FROM games WHERE id = $1', [game.id]);
+
+      // Remove party state for this game
+      gameParties.delete(game.name);
+
+      console.log(`[Auto Cleanup] Deleted game "${game.name}"`);
+    }
+
+    console.log('[Auto Cleanup] Cleanup complete!');
+  } catch (err) {
+    console.error('[Auto Cleanup] Error during cleanup:', err);
+  }
+}, CLEANUP_INTERVAL);
 
 async function initDB() {
   try {
@@ -266,6 +340,7 @@ io.on('connection', (socket) => {
       // Store game context on socket for cleanup on disconnect
       socket.gameId = data.gameId;
       socket.playerName = data.player.name;
+      socket.gameName = game.rows[0].name; // Store the actual game name for party lookups
 
       // Load character inventory from database
       const character = await pool.query(
@@ -607,105 +682,186 @@ io.on('connection', (socket) => {
     const inventory = playerInventories.get(socket.id);
     if (!inventory || !socket.characterId) return;
 
-    const { amount } = data;
+    const { amount, monsterLevel, currentLocation } = data;
 
     // Validate amount
     if (typeof amount !== 'number' || amount <= 0) return;
 
-    // Initialize experience if not exists
-    if (!inventory.experience) inventory.experience = 0;
-    if (!inventory.level) inventory.level = 1;
-    if (!inventory.monstersKilled) inventory.monstersKilled = 0;
+    // Get player's party if they're in one
+    // Use the actual game name, not game_${gameId}
+    const gameName = socket.gameName;
+    let partyMembers = [{ name: socket.playerName, level: inventory.level || 1, socketId: socket.id }];
 
-    const oldLevel = inventory.level;
-    inventory.experience += amount;
-    inventory.monstersKilled += 1;
+    console.log(`[Party Exp Debug] gameName: ${gameName}, has parties: ${gameParties.has(gameName)}`);
 
-    // Experience table for leveling
-    const EXPERIENCE_TABLE = [
-      0, 64, 77, 93, 113, 137, 166, 202, 244, 296,
-      359, 434, 526, 638, 772, 936, 1134, 1373, 1663, 2015,
-      2440, 2956, 3580, 4337, 5253, 6363, 7707, 9335, 11307, 13696,
-      16589, 20093, 24337, 29478, 35705, 43248, 52384, 63449, 76852, 93086,
-      112749, 136566, 165414, 200356, 242678, 293941, 356032, 431240, 522333, 632670,
-      766313, 928187, 1124254, 1361738, 1649388, 1997799, 2419809, 2930962, 3550089, 4300000,
-      4591991, 4903809, 5236802, 5592406, 5972158, 6377697, 6810774, 7273259, 7767149, 8294576,
-      8857818, 9459308, 10101641, 10787592, 11520122, 12302395, 13137788, 14029908, 14982607, 16000000,
-      17171217, 18428168, 19777129, 21224836, 22778517, 24445929, 26235397, 28155856, 30216894, 32428803,
-      34802626, 37350215, 40084291, 43018504, 46167504, 49547015, 53173909, 57066295, 61243609, 65726706,
-      70537971, 75701426, 81242851, 87189914, 93572308, 100421901, 107772891, 115661981, 124128562, 133214904,
-      142966377, 153431668, 164663029, 176716538, 189652377, 203535133, 218434121, 234423731, 251583798, 270000000,
-      298433158, 329860556, 364597510, 402992543, 445430880, 492338313, 544185474, 601492555, 664834531, 734846922,
-      812232179, 897766721, 992308735, 1096806779, 1212309302, 1339975165, 1481085263, 1637055384, 1809450405, 2000000000,
-      2297396709, 2639015821, 3031433133, 3482202253, 4000000000, 4594793419, 5278031643, 6062866266, 6964404506, 8000000000
-    ];
+    if (gameName && gameParties.has(gameName)) {
+      const parties = gameParties.get(gameName);
+      console.log(`[Party Exp Debug] Found ${parties.size} parties in game`);
+      for (const [partyId, party] of parties.entries()) {
+        console.log(`[Party Exp Debug] Checking party ${partyId}, members: ${party.members.join(', ')}, looking for: ${socket.playerName}`);
+        if (party.members.includes(socket.playerName)) {
+          console.log(`[Party Exp Debug] Player ${socket.playerName} is in party!`);
+          // Get all party members with their levels and socket IDs
+          const players = await pool.query(
+            'SELECT socket_id, name, level FROM players WHERE game_id = $1 AND name = ANY($2)',
+            [socket.gameId, party.members]
+          );
 
-    // Calculate new level
-    let newLevel = 1;
-    for (let i = EXPERIENCE_TABLE.length - 1; i >= 0; i--) {
-      if (inventory.experience >= EXPERIENCE_TABLE[i]) {
-        newLevel = i + 1;
-        break;
+          partyMembers = players.rows
+            .map(p => {
+              const memberInventory = Array.from(playerInventories.entries())
+                .find(([sid, inv]) => inv && p.name === socket.playerName || p.socket_id === sid);
+              return {
+                name: p.name,
+                level: memberInventory ? (memberInventory[1].level || 1) : (p.level || 1),
+                socketId: p.socket_id,
+                location: p.location || currentLocation
+              };
+            })
+            .filter(m => m.location === currentLocation); // Only party members in same zone
+          console.log(`[Party Exp Debug] Found ${partyMembers.length} party members in same location:`, partyMembers.map(m => m.name));
+          break;
+        }
       }
     }
 
-    inventory.level = Math.min(newLevel, 150);
+    // Calculate experience for each party member
+    const expResults = calculatePartyExperience(
+      amount,
+      partyMembers,
+      inventory.level || 1,
+      monsterLevel || 1
+    );
 
-    // Check if leveled up
-    if (inventory.level > oldLevel) {
-      const levelsGained = inventory.level - oldLevel;
+    // Award experience to each party member
+    for (const member of partyMembers) {
+      const memberExp = expResults[member.name] || 0;
+      if (memberExp <= 0) continue;
 
-      // Distribute 10 random stat points per level across the 14 character stats
-      const statNames = ['strength', 'dexterity', 'constitution', 'intelligence', 'luck', 'endurance', 'speed', 'perception', 'vitality', 'spirit', 'defense', 'charisma', 'resilience', 'forging'];
-      const statGains = {};
+      // Find the member's socket and inventory
+      let memberSocketId = member.socketId;
+      let memberInventory = playerInventories.get(memberSocketId);
 
-      for (let i = 0; i < levelsGained; i++) {
-        for (let j = 0; j < 10; j++) {
-          const randomStat = statNames[Math.floor(Math.random() * statNames.length)];
-          statGains[randomStat] = (statGains[randomStat] || 0) + 1;
+      if (!memberInventory) {
+        // Try to find by player name
+        for (const [sid, inv] of playerInventories.entries()) {
+          const sock = io.sockets.sockets.get(sid);
+          if (sock && sock.playerName === member.name) {
+            memberSocketId = sid;
+            memberInventory = inv;
+            break;
+          }
         }
       }
 
-      // Apply stat gains to character stats
-      if (!inventory.stats) {
-        inventory.stats = {
-          strength: 0, dexterity: 0, constitution: 0, intelligence: 0,
-          luck: 0, endurance: 0, speed: 0, perception: 0,
-          vitality: 0, spirit: 0, defense: 0, charisma: 0,
-          resilience: 0, forging: 0
-        };
+      if (!memberInventory) continue;
+
+      // Initialize experience if not exists
+      if (!memberInventory.experience) memberInventory.experience = 0;
+      if (!memberInventory.level) memberInventory.level = 1;
+      if (member.name === socket.playerName) {
+        if (!memberInventory.monstersKilled) memberInventory.monstersKilled = 0;
+        memberInventory.monstersKilled += 1;
+        console.log(`[Kill Counter] ${member.name} killed a monster. Total kills: ${memberInventory.monstersKilled}`);
+      } else {
+        console.log(`[Kill Counter] ${member.name} is party member, not killer (killer is ${socket.playerName})`);
       }
 
-      for (const [stat, gain] of Object.entries(statGains)) {
-        inventory.stats[stat] = (inventory.stats[stat] || 0) + gain;
+      const oldLevel = memberInventory.level;
+      memberInventory.experience += memberExp;
+
+      // Experience table for leveling
+      const EXPERIENCE_TABLE = [
+        0, 64, 77, 93, 113, 137, 166, 202, 244, 296,
+        359, 434, 526, 638, 772, 936, 1134, 1373, 1663, 2015,
+        2440, 2956, 3580, 4337, 5253, 6363, 7707, 9335, 11307, 13696,
+        16589, 20093, 24337, 29478, 35705, 43248, 52384, 63449, 76852, 93086,
+        112749, 136566, 165414, 200356, 242678, 293941, 356032, 431240, 522333, 632670,
+        766313, 928187, 1124254, 1361738, 1649388, 1997799, 2419809, 2930962, 3550089, 4300000,
+        4591991, 4903809, 5236802, 5592406, 5972158, 6377697, 6810774, 7273259, 7767149, 8294576,
+        8857818, 9459308, 10101641, 10787592, 11520122, 12302395, 13137788, 14029908, 14982607, 16000000,
+        17171217, 18428168, 19777129, 21224836, 22778517, 24445929, 26235397, 28155856, 30216894, 32428803,
+        34802626, 37350215, 40084291, 43018504, 46167504, 49547015, 53173909, 57066295, 61243609, 65726706,
+        70537971, 75701426, 81242851, 87189914, 93572308, 100421901, 107772891, 115661981, 124128562, 133214904,
+        142966377, 153431668, 164663029, 176716538, 189652377, 203535133, 218434121, 234423731, 251583798, 270000000,
+        298433158, 329860556, 364597510, 402992543, 445430880, 492338313, 544185474, 601492555, 664834531, 734846922,
+        812232179, 897766721, 992308735, 1096806779, 1212309302, 1339975165, 1481085263, 1637055384, 1809450405, 2000000000,
+        2297396709, 2639015821, 3031433133, 3482202253, 4000000000, 4594793419, 5278031643, 6062866266, 6964404506, 8000000000
+      ];
+
+      // Calculate new level
+      let newLevel = 1;
+      for (let i = EXPERIENCE_TABLE.length - 1; i >= 0; i--) {
+        if (memberInventory.experience >= EXPERIENCE_TABLE[i]) {
+          newLevel = i + 1;
+          break;
+        }
       }
 
-      // Broadcast level up
-      socket.emit('level_up', {
-        level: inventory.level,
-        levelsGained,
-        statGains,
-        totalStats: inventory.stats
-      });
+      memberInventory.level = Math.min(newLevel, 150);
 
-      console.log(`Player ${socket.playerName} leveled up to ${inventory.level}! Stat gains:`, statGains);
+      // Check if leveled up
+      if (memberInventory.level > oldLevel) {
+        const levelsGained = memberInventory.level - oldLevel;
+
+        // Distribute 10 random stat points per level across the 14 character stats
+        const statNames = ['strength', 'dexterity', 'constitution', 'intelligence', 'luck', 'endurance', 'speed', 'perception', 'vitality', 'spirit', 'defense', 'charisma', 'resilience', 'forging'];
+        const statGains = {};
+
+        for (let i = 0; i < levelsGained; i++) {
+          for (let j = 0; j < 10; j++) {
+            const randomStat = statNames[Math.floor(Math.random() * statNames.length)];
+            statGains[randomStat] = (statGains[randomStat] || 0) + 1;
+          }
+        }
+
+        // Apply stat gains to character stats
+        if (!memberInventory.stats) {
+          memberInventory.stats = {
+            strength: 0, dexterity: 0, constitution: 0, intelligence: 0,
+            luck: 0, endurance: 0, speed: 0, perception: 0,
+            vitality: 0, spirit: 0, defense: 0, charisma: 0,
+            resilience: 0, forging: 0
+          };
+        }
+
+        for (const [stat, gain] of Object.entries(statGains)) {
+          memberInventory.stats[stat] = (memberInventory.stats[stat] || 0) + gain;
+        }
+
+        // Broadcast level up to the member
+        const memberSocket = io.sockets.sockets.get(memberSocketId);
+        if (memberSocket) {
+          memberSocket.emit('level_up', {
+            level: memberInventory.level,
+            levelsGained,
+            statGains,
+            totalStats: memberInventory.stats
+          });
+        }
+
+        console.log(`Player ${member.name} leveled up to ${memberInventory.level}! Stat gains:`, statGains);
+      }
+
+      // Broadcast experience and stats update to the member
+      const memberSocket = io.sockets.sockets.get(memberSocketId);
+      if (memberSocket) {
+        memberSocket.emit('experience_updated', {
+          experience: memberInventory.experience,
+          gained: memberExp,
+          level: memberInventory.level,
+          monstersKilled: memberInventory.monstersKilled || 0
+        });
+
+        memberSocket.emit('stats_updated', {
+          monstersKilled: memberInventory.monstersKilled || 0,
+          deaths: memberInventory.deaths || 0,
+          stats: memberInventory.stats
+        });
+      }
+
+      console.log(`Player ${member.name} gained ${memberExp} XP (Total: ${memberInventory.experience}, Level: ${memberInventory.level})`);
     }
-
-    // Broadcast experience and stats update to client
-    socket.emit('experience_updated', {
-      experience: inventory.experience,
-      gained: amount,
-      level: inventory.level,
-      monstersKilled: inventory.monstersKilled
-    });
-
-    socket.emit('stats_updated', {
-      monstersKilled: inventory.monstersKilled,
-      deaths: inventory.deaths || 0,
-      stats: inventory.stats
-    });
-
-    console.log(`Player ${socket.playerName} gained ${amount} XP (Total: ${inventory.experience}, Level: ${inventory.level})`);
   });
 
   socket.on('player_death', () => {
@@ -726,6 +882,182 @@ io.on('connection', (socket) => {
 
     console.log(`Player ${socket.playerName} died (Total deaths: ${inventory.deaths})`);
   });
+
+  // ===== PARTY SYSTEM HANDLERS =====
+
+  socket.on('request_player_list', async (data) => {
+    try {
+      const { gameName } = data;
+      const gameId = socket.gameId;
+
+      console.log(`[Party] Player list requested for game ${gameId} by ${socket.playerName}`);
+
+      if (!gameId) {
+        console.log('[Party] No gameId found on socket');
+        return;
+      }
+
+      const players = await pool.query(
+        'SELECT name, class, race, level FROM players WHERE game_id = $1 AND name != $2',
+        [gameId, socket.playerName]
+      );
+
+      console.log(`[Party] Found ${players.rows.length} other players in game`);
+
+      // Get levels from inventory
+      const playersWithLevels = players.rows.map(p => {
+        // Find player's inventory to get current level
+        for (const [sid, inv] of playerInventories.entries()) {
+          const sock = io.sockets.sockets.get(sid);
+          if (sock && sock.playerName === p.name) {
+            return { ...p, level: inv.level || p.level || 1 };
+          }
+        }
+        return { ...p, level: p.level || 1 };
+      });
+
+      console.log(`[Party] Sending player list:`, playersWithLevels);
+      socket.emit('player_list_updated', playersWithLevels);
+    } catch (err) {
+      console.error('[Party] Error getting player list:', err.message);
+    }
+  });
+
+  socket.on('party_invite', (data) => {
+    const { gameName, from, to } = data;
+
+    // Find the target player's socket
+    for (const [sid, inv] of playerInventories.entries()) {
+      const sock = io.sockets.sockets.get(sid);
+      if (sock && sock.playerName === to && sock.gameId === socket.gameId) {
+        sock.emit('party_invite_received', { from });
+        break;
+      }
+    }
+  });
+
+  socket.on('party_accept', (data) => {
+    const { gameName, from, accepter } = data;
+    const gameId = socket.gameId;
+
+    if (!gameId) return;
+
+    // Initialize game parties if not exists
+    if (!gameParties.has(gameName)) {
+      gameParties.set(gameName, new Map());
+    }
+
+    const parties = gameParties.get(gameName);
+
+    // Check if either player is already in a party
+    let existingParty = null;
+    for (const [partyId, party] of parties.entries()) {
+      if (party.members.includes(from) || party.members.includes(accepter)) {
+        existingParty = party;
+        break;
+      }
+    }
+
+    if (existingParty) {
+      // Add to existing party
+      if (!existingParty.members.includes(accepter)) {
+        existingParty.members.push(accepter);
+      }
+      if (!existingParty.members.includes(from)) {
+        existingParty.members.push(from);
+      }
+    } else {
+      // Create new party
+      const partyId = `party_${Date.now()}`;
+      parties.set(partyId, {
+        members: [from, accepter],
+        leader: from
+      });
+      existingParty = parties.get(partyId);
+    }
+
+    // Notify all party members
+    for (const memberName of existingParty.members) {
+      for (const [sid, inv] of playerInventories.entries()) {
+        const sock = io.sockets.sockets.get(sid);
+        if (sock && sock.playerName === memberName && sock.gameId === gameId) {
+          sock.emit('party_updated', existingParty);
+          break;
+        }
+      }
+    }
+
+    console.log(`Party formed: ${existingParty.members.join(', ')}`);
+  });
+
+  socket.on('party_leave', (data) => {
+    const { gameName, playerName } = data;
+
+    if (!gameParties.has(gameName)) return;
+
+    const parties = gameParties.get(gameName);
+
+    for (const [partyId, party] of parties.entries()) {
+      if (party.members.includes(playerName)) {
+        // Remove player from party
+        party.members = party.members.filter(m => m !== playerName);
+
+        if (party.members.length === 0) {
+          // Delete empty party
+          parties.delete(partyId);
+        } else {
+          // Notify remaining members
+          for (const memberName of party.members) {
+            for (const [sid, inv] of playerInventories.entries()) {
+              const sock = io.sockets.sockets.get(sid);
+              if (sock && sock.playerName === memberName) {
+                sock.emit('party_updated', party);
+                break;
+              }
+            }
+          }
+        }
+
+        // Notify the leaving player
+        socket.emit('party_left');
+        break;
+      }
+    }
+  });
+
+  // Map event handler - broadcast enemy kills, trap activations, etc.
+  socket.on('map_event', (data) => {
+    const { gameId, type, x, y, location, monsterData } = data;
+
+    console.log(`[Map Event] ${type} at (${x}, ${y}) in ${location} by ${socket.playerName}`);
+
+    // Broadcast to all other players in the same game and location
+    io.to(`game_${gameId}`).emit('map_event_broadcast', {
+      type,
+      x,
+      y,
+      location,
+      playerName: socket.playerName
+    });
+
+    // If it's an enemy kill with monster data, trigger award_experience for party sharing
+    if (type === 'enemy_killed' && monsterData) {
+      console.log(`[Party Exp] Monster killed: ${monsterData.name} (level ${monsterData.level}) for ${monsterData.experience} exp`);
+
+      // Directly invoke the award_experience handler
+      const handler = socket._events['award_experience'];
+      if (handler) {
+        const fn = typeof handler === 'function' ? handler : handler[0];
+        fn.call(socket, {
+          amount: monsterData.experience,
+          monsterLevel: monsterData.level,
+          currentLocation: location
+        });
+      }
+    }
+  });
+
+  // ===== END PARTY HANDLERS =====
 
   // ===== END INVENTORY HANDLERS =====
 

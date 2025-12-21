@@ -100,7 +100,75 @@
     #messageBox.show {
       display: block;
     }
+
+    #party-ui {
+      position: fixed;
+      left: 20px;
+      top: 20px;
+      width: 300px;
+      max-height: 600px;
+      background-color: rgba(26, 26, 26, 0.95);
+      border: 2px solid #333;
+      border-radius: 4px;
+      padding: 15px;
+      display: none;
+      overflow-y: auto;
+    }
+
+    #party-ui h3 {
+      margin-bottom: 15px;
+      color: #fff;
+      font-size: 18px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+
+    .party-player-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px;
+      margin-bottom: 8px;
+      background-color: rgba(0, 0, 0, 0.3);
+      border: 1px solid #444;
+      border-radius: 3px;
+    }
+
+    .party-player-info {
+      flex: 1;
+    }
+
+    .party-player-name {
+      font-weight: bold;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .party-player-details {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .party-invite-btn {
+      padding: 6px 12px;
+      background-color: #2a5;
+      border: none;
+      border-radius: 3px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .party-invite-btn:hover {
+      background-color: #3b6;
+    }
+
+    .party-invite-btn:disabled {
+      background-color: #555;
+      cursor: not-allowed;
+    }
   </style>
+
 </head>
 
 <body>
@@ -115,7 +183,11 @@
     <button class="resolution-btn" data-res="96">96x96 px</button>
     <button class="resolution-btn" data-res="128">128x128 px</button>
   </div>
-  <div id="info">Press R to change resolution</div>
+  <div id="info">Press R to change resolution | Press P for party</div>
+  <div id="party-ui">
+    <h3>Players</h3>
+    <div id="party-player-list"></div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
@@ -127,6 +199,7 @@
   <script src="inventory.js"></script>
   <script src="characterSheet.js"></script>
   <script src="monsters.js"></script>
+  <script src="party.js"></script>
   <script src="fight.js"></script>
   <script src="skills.js"></script>
   <script src="game.js"></script>
@@ -148,6 +221,7 @@
       const game = new Game(gameInfo.mapSeed);
       game.character = character;
       game.gameName = gameInfo.gameName;
+      game.gameId = gameInfo.id;
       game.socket = socket;
       game.otherPlayers = gameInfo.players || [];
 
@@ -165,6 +239,43 @@
 
       const characterSheet = new CharacterSheet(game, socket);
       game.characterSheet = characterSheet;
+
+      // Initialize Party Manager
+      const partyManager = new PartyManager(game);
+      game.partyManager = partyManager;
+
+      // Add P key handler for party UI
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'p' || e.key === 'P') {
+          if (!game.menuOpen) {  // Don't toggle if resolution menu is open
+            partyManager.toggleUI();
+          }
+        }
+      });
+
+      // Party socket handlers
+      socket.on('player_list_updated', (players) => {
+        partyManager.displayPlayerList(players);
+      });
+
+      socket.on('party_invite_received', (data) => {
+        partyManager.receivePartyInvite(data.from);
+      });
+
+      socket.on('party_updated', (partyData) => {
+        partyManager.updateParty(partyData);
+      });
+
+      socket.on('party_left', () => {
+        partyManager.currentParty = null;
+        game.setMessage('You left the party');
+      });
+
+      // Handle forced lobby redirect (from auto-cleanup)
+      socket.on('force_lobby', (data) => {
+        alert(data.message || 'Returning to lobby...');
+        window.location.href = 'lobby.html';
+      });
 
       // Socket handlers
       socket.on('position_updated', (data) => {
@@ -217,6 +328,30 @@
         if (player.name !== character.name && !game.otherPlayers.find(p => p.name === player.name)) {
           game.otherPlayers.push(player);
           game.render();
+        }
+      });
+
+      // Handle map events from other players (enemy kills, trap activations, etc.)
+      socket.on('map_event_broadcast', (data) => {
+        const { type, x, y, location, playerName } = data;
+
+        // Only process if we're in the same location
+        const currentLocation = game.inTown && game.currentTown
+          ? game.currentTown.name
+          : (game.currentLocation || 'wilderness');
+
+        if (location !== currentLocation) return;
+
+        console.log(`[Map Event] Received ${type} at (${x}, ${y}) from ${playerName}`);
+
+        if (type === 'enemy_killed') {
+          // Remove enemy from our local map
+          const enemyIndex = game.enemies.findIndex(e => e.x === x && e.y === y);
+          if (enemyIndex !== -1) {
+            game.enemies.splice(enemyIndex, 1);
+            game.render();
+            console.log(`[Map Event] Removed enemy at (${x}, ${y})`);
+          }
         }
       });
 
