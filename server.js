@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const path = require('path');
 const { calculatePartyExperience } = require('./partyExp');
+const { getStarterGear } = require('./items');
 require('dotenv').config();
 
 const app = express();
@@ -39,7 +40,7 @@ const playerInventories = new Map();
 const gameParties = new Map();
 
 // Auto-cleanup games every hour
-const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // 5 minutes in milliseconds
 setInterval(async () => {
   try {
     console.log('[Auto Cleanup] Starting hourly game cleanup...');
@@ -54,27 +55,11 @@ setInterval(async () => {
         [game.id]
       );
 
-      console.log(`[Auto Cleanup] Cleaning game "${game.name}" (${players.rows.length} players)`);
+      console.log(`[Auto Cleanup] Cleaning game "${game.name}"(${players.rows.length} players)`);
 
-      // Save and kick each player
+      // Kick each player to lobby (they'll auto-save on disconnect)
       for (const player of players.rows) {
-        const inventory = playerInventories.get(player.socket_id);
-        if (inventory) {
-          // Save inventory to database
-          await pool.query(
-            'UPDATE characters SET inventory = $1, gold = $2, level = $3, experience = $4, deaths = $5, monsters_killed = $6 WHERE id = $7',
-            [
-              JSON.stringify(inventory.slots || []),
-              inventory.gold || 0,
-              inventory.level || 1,
-              inventory.experience || 0,
-              inventory.deaths || 0,
-              inventory.monstersKilled || 0,
-              inventory.characterId
-            ]
-          );
-          console.log(`[Auto Cleanup] Saved inventory for ${player.name}`);
-        }
+        console.log(`[Auto Cleanup] Processing player: ${player.name}, socket_id: ${player.socket_id} `);
 
         // Get socket and redirect to lobby
         const socket = io.sockets.sockets.get(player.socket_id);
@@ -83,6 +68,8 @@ setInterval(async () => {
             message: 'Game has been automatically cleaned up. Returning to lobby...'
           });
           console.log(`[Auto Cleanup] Kicked ${player.name} to lobby`);
+        } else {
+          console.log(`[Auto Cleanup] Socket not found for ${player.name}(socket_id: ${player.socket_id})`);
         }
 
         // Remove from playerInventories
@@ -110,53 +97,53 @@ setInterval(async () => {
 async function initDB() {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS games (
-        id BIGINT PRIMARY KEY,
-        name VARCHAR(30) UNIQUE NOT NULL,
-        password VARCHAR(100),
-        pvp_enabled BOOLEAN DEFAULT true,
-        map_seed BIGINT,
-        creator_name VARCHAR(21),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS players (
-        id SERIAL PRIMARY KEY,
-        game_id BIGINT REFERENCES games(id) ON DELETE CASCADE,
-        socket_id VARCHAR(100),
-        name VARCHAR(21),
-        class VARCHAR(20),
-        race VARCHAR(20),
-        level INTEGER,
-        x INTEGER,
-        y INTEGER,
-        location VARCHAR(50) DEFAULT 'Skargnes'
-      );
-    `);
-
-    await pool.query(`
-  CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
-    username VARCHAR(16) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW()
-  );
+      CREATE TABLE IF NOT EXISTS games(
+  id VARCHAR(20) PRIMARY KEY,
+  name VARCHAR(30) UNIQUE NOT NULL,
+  password VARCHAR(100),
+  pvp_enabled BOOLEAN DEFAULT true,
+  map_seed BIGINT,
+  creator_name VARCHAR(21),
+  created_at TIMESTAMP DEFAULT NOW()
+);
 `);
 
     await pool.query(`
-  CREATE TABLE IF NOT EXISTS characters (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    name VARCHAR(21) NOT NULL,
-    level INTEGER DEFAULT 1,
-    alignment VARCHAR(20),
-    race VARCHAR(20),
-    class VARCHAR(20),
-    stats JSONB,
-    created_at TIMESTAMP DEFAULT NOW()
-  );
+      CREATE TABLE IF NOT EXISTS players(
+  id SERIAL PRIMARY KEY,
+  game_id VARCHAR(20) REFERENCES games(id) ON DELETE CASCADE,
+  socket_id VARCHAR(100),
+  name VARCHAR(21),
+  class VARCHAR(20),
+  race VARCHAR(20),
+  level INTEGER,
+  x INTEGER,
+  y INTEGER,
+  location VARCHAR(50) DEFAULT 'Skargnes'
+);
+`);
+
+    await pool.query(`
+  CREATE TABLE IF NOT EXISTS users(
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(16) UNIQUE NOT NULL,
+  password VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+`);
+
+    await pool.query(`
+  CREATE TABLE IF NOT EXISTS characters(
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(21) NOT NULL,
+  level INTEGER DEFAULT 1,
+  alignment VARCHAR(20),
+  race VARCHAR(20),
+  class VARCHAR(20),
+  stats JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
 `);
 
     console.log('✓ Database ready');
@@ -284,7 +271,10 @@ io.on('connection', (socket) => {
 
   socket.on('create_game', async (data) => {
     try {
-      const gameId = Math.floor(Date.now() / 1000);
+      // Generate alphanumeric game ID: timestamp + 4 random chars
+      const timestamp = Date.now().toString(36); // Base36 for shorter string
+      const randomChars = Math.random().toString(36).substring(2, 6); // 4 random chars
+      const gameId = timestamp + randomChars;
 
       await pool.query(
         'INSERT INTO games (id, name, password, pvp_enabled, map_seed, creator_name) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -296,7 +286,7 @@ io.on('connection', (socket) => {
         [gameId, socket.id, data.player.name, data.player.class, data.player.race, data.player.level, data.player.x, data.player.y]
       );
 
-      socket.join(`game_${gameId}`);
+      socket.join(`game_${gameId} `);
 
       const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
       io.emit('games_updated', games.rows);
@@ -333,9 +323,15 @@ io.on('connection', (socket) => {
           'INSERT INTO players (game_id, socket_id, name, class, race, level, x, y) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
           [data.gameId, socket.id, data.player.name, data.player.class, data.player.race, data.player.level, data.player.x, data.player.y]
         );
+      } else {
+        // Player already exists, update their socket_id (in case they reconnected)
+        await pool.query(
+          'UPDATE players SET socket_id = $1 WHERE game_id = $2 AND name = $3',
+          [socket.id, data.gameId, data.player.name]
+        );
       }
 
-      socket.join(`game_${data.gameId}`);
+      socket.join(`game_${data.gameId} `);
 
       // Store game context on socket for cleanup on disconnect
       socket.gameId = data.gameId;
@@ -371,6 +367,18 @@ io.on('connection', (socket) => {
         if (stats.baseStats) inventoryData.stats = stats.baseStats;
 
         socket.characterId = character.rows[0].id;
+
+        // Apply starting equipment if player has no equipment
+        const hasNoEquipment = !inventoryData.equipped.weapon &&
+          !inventoryData.equipped.armor &&
+          !inventoryData.equipped.helm &&
+          !inventoryData.equipped.shield;
+
+        if (hasNoEquipment && character.rows[0].class) {
+          console.log(`[Starting Gear] Applying starting equipment for ${character.rows[0].class}`);
+          const starterGear = getStarterGear(character.rows[0].class);
+          inventoryData.equipped = starterGear;
+        }
       }
 
       // Calculate level from experience if not set
@@ -479,7 +487,7 @@ io.on('connection', (socket) => {
           equipment: inventory ? inventory.equipped : {}
         };
       });
-      socket.to(`game_${data.gameId}`).emit('players_in_game', othersInRoom);
+      socket.to(`game_${data.gameId} `).emit('players_in_game', othersInRoom);
 
       socket.emit('game_joined', { ...game.rows[0], players: players.rows });
     } catch (err) {
@@ -490,7 +498,7 @@ io.on('connection', (socket) => {
 
   socket.on('update_position', (data) => {
     const { gameId, playerName, x, y, equipment } = data;
-    io.to(`game_${gameId}`).emit('position_updated', {
+    io.to(`game_${gameId} `).emit('position_updated', {
       playerName,
       x,
       y,
@@ -500,7 +508,7 @@ io.on('connection', (socket) => {
 
   socket.on('update_location', (data) => {
     const { gameId, location, playerName } = data;
-    io.to(`game_${gameId}`).emit('location_updated', {
+    io.to(`game_${gameId} `).emit('location_updated', {
       socketId: socket.id,
       playerName: playerName,
       location
@@ -531,7 +539,7 @@ io.on('connection', (socket) => {
         deaths: inventory.deaths || 0
       });
 
-      console.log(`Player ${socket.playerName} picked up ${item.name}`);
+      console.log(`Player ${socket.playerName} picked up ${item.name} `);
     } else {
       socket.emit('inventory_full');
     }
@@ -583,7 +591,7 @@ io.on('connection', (socket) => {
       equipment: inventory.equipped
     });
 
-    console.log(`Player ${socket.playerName} equipped ${item.name}`);
+    console.log(`Player ${socket.playerName} equipped ${item.name} `);
   });
 
   socket.on('inventory_unequip_item', (data) => {
@@ -618,7 +626,7 @@ io.on('connection', (socket) => {
         equipment: inventory.equipped
       });
 
-      console.log(`Player ${socket.playerName} unequipped ${item.name}`);
+      console.log(`Player ${socket.playerName} unequipped ${item.name} `);
     } else {
       socket.emit('inventory_full');
     }
@@ -650,7 +658,7 @@ io.on('connection', (socket) => {
       deaths: inventory.deaths || 0
     });
 
-    console.log(`Player ${socket.playerName} deleted ${item.name}`);
+    console.log(`Player ${socket.playerName} deleted ${item.name} `);
   });
 
   socket.on('inventory_add_gold', (data) => {
@@ -692,13 +700,13 @@ io.on('connection', (socket) => {
     const gameName = socket.gameName;
     let partyMembers = [{ name: socket.playerName, level: inventory.level || 1, socketId: socket.id }];
 
-    console.log(`[Party Exp Debug] gameName: ${gameName}, has parties: ${gameParties.has(gameName)}`);
+    console.log(`[Party Exp Debug]gameName: ${gameName}, has parties: ${gameParties.has(gameName)} `);
 
     if (gameName && gameParties.has(gameName)) {
       const parties = gameParties.get(gameName);
       console.log(`[Party Exp Debug] Found ${parties.size} parties in game`);
       for (const [partyId, party] of parties.entries()) {
-        console.log(`[Party Exp Debug] Checking party ${partyId}, members: ${party.members.join(', ')}, looking for: ${socket.playerName}`);
+        console.log(`[Party Exp Debug] Checking party ${partyId}, members: ${party.members.join(', ')}, looking for: ${socket.playerName} `);
         if (party.members.includes(socket.playerName)) {
           console.log(`[Party Exp Debug] Player ${socket.playerName} is in party!`);
           // Get all party members with their levels and socket IDs
@@ -719,7 +727,7 @@ io.on('connection', (socket) => {
               };
             })
             .filter(m => m.location === currentLocation); // Only party members in same zone
-          console.log(`[Party Exp Debug] Found ${partyMembers.length} party members in same location:`, partyMembers.map(m => m.name));
+          console.log(`[Party Exp Debug] Found ${partyMembers.length} party members in same location: `, partyMembers.map(m => m.name));
           break;
         }
       }
@@ -762,9 +770,9 @@ io.on('connection', (socket) => {
       if (member.name === socket.playerName) {
         if (!memberInventory.monstersKilled) memberInventory.monstersKilled = 0;
         memberInventory.monstersKilled += 1;
-        console.log(`[Kill Counter] ${member.name} killed a monster. Total kills: ${memberInventory.monstersKilled}`);
+        console.log(`[Kill Counter] ${member.name} killed a monster.Total kills: ${memberInventory.monstersKilled} `);
       } else {
-        console.log(`[Kill Counter] ${member.name} is party member, not killer (killer is ${socket.playerName})`);
+        console.log(`[Kill Counter] ${member.name} is party member, not killer(killer is ${socket.playerName})`);
       }
 
       const oldLevel = memberInventory.level;
@@ -840,7 +848,7 @@ io.on('connection', (socket) => {
           });
         }
 
-        console.log(`Player ${member.name} leveled up to ${memberInventory.level}! Stat gains:`, statGains);
+        console.log(`Player ${member.name} leveled up to ${memberInventory.level} !Stat gains: `, statGains);
       }
 
       // Broadcast experience and stats update to the member
@@ -860,7 +868,7 @@ io.on('connection', (socket) => {
         });
       }
 
-      console.log(`Player ${member.name} gained ${memberExp} XP (Total: ${memberInventory.experience}, Level: ${memberInventory.level})`);
+      console.log(`Player ${member.name} gained ${memberExp} XP(Total: ${memberInventory.experience}, Level: ${memberInventory.level})`);
     }
   });
 
@@ -880,7 +888,7 @@ io.on('connection', (socket) => {
       stats: inventory.stats
     });
 
-    console.log(`Player ${socket.playerName} died (Total deaths: ${inventory.deaths})`);
+    console.log(`Player ${socket.playerName} died(Total deaths: ${inventory.deaths})`);
   });
 
   // ===== PARTY SYSTEM HANDLERS =====
@@ -890,7 +898,7 @@ io.on('connection', (socket) => {
       const { gameName } = data;
       const gameId = socket.gameId;
 
-      console.log(`[Party] Player list requested for game ${gameId} by ${socket.playerName}`);
+      console.log(`[Party] Player list requested for game ${gameId} by ${socket.playerName} `);
 
       if (!gameId) {
         console.log('[Party] No gameId found on socket');
@@ -916,7 +924,7 @@ io.on('connection', (socket) => {
         return { ...p, level: p.level || 1 };
       });
 
-      console.log(`[Party] Sending player list:`, playersWithLevels);
+      console.log(`[Party] Sending player list: `, playersWithLevels);
       socket.emit('player_list_updated', playersWithLevels);
     } catch (err) {
       console.error('[Party] Error getting player list:', err.message);
@@ -968,7 +976,7 @@ io.on('connection', (socket) => {
       }
     } else {
       // Create new party
-      const partyId = `party_${Date.now()}`;
+      const partyId = `party_${Date.now()} `;
       parties.set(partyId, {
         members: [from, accepter],
         leader: from
@@ -987,7 +995,7 @@ io.on('connection', (socket) => {
       }
     }
 
-    console.log(`Party formed: ${existingParty.members.join(', ')}`);
+    console.log(`Party formed: ${existingParty.members.join(', ')} `);
   });
 
   socket.on('party_leave', (data) => {
@@ -1029,10 +1037,10 @@ io.on('connection', (socket) => {
   socket.on('map_event', (data) => {
     const { gameId, type, x, y, location, monsterData } = data;
 
-    console.log(`[Map Event] ${type} at (${x}, ${y}) in ${location} by ${socket.playerName}`);
+    console.log(`[Map Event] ${type} at(${x}, ${y}) in ${location} by ${socket.playerName} `);
 
     // Broadcast to all other players in the same game and location
-    io.to(`game_${gameId}`).emit('map_event_broadcast', {
+    io.to(`game_${gameId} `).emit('map_event_broadcast', {
       type,
       x,
       y,
@@ -1074,13 +1082,13 @@ io.on('connection', (socket) => {
       );
 
       // Notify other players
-      socket.to(`game_${gameId}`).emit('player_left', { name: playerName });
+      socket.to(`game_${gameId} `).emit('player_left', { name: playerName });
 
       // Update games list
       const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
       io.emit('games_updated', games.rows);
 
-      console.log(`✓ Player ${playerName} left game ${gameId}`);
+      console.log(`✓ Player ${playerName} left game ${gameId} `);
     } catch (err) {
       console.error('Error leaving game:', err.message);
     }
@@ -1125,7 +1133,7 @@ io.on('connection', (socket) => {
         );
 
         // Notify other players in the game
-        socket.to(`game_${socket.gameId}`).emit('player_left', {
+        socket.to(`game_${socket.gameId} `).emit('player_left', {
           name: socket.playerName
         });
 
@@ -1133,7 +1141,7 @@ io.on('connection', (socket) => {
         const games = await pool.query('SELECT * FROM games ORDER BY created_at DESC');
         io.emit('games_updated', games.rows);
 
-        console.log(`✓ Cleaned up player ${socket.playerName} from game ${socket.gameId}`);
+        console.log(`✓ Cleaned up player ${socket.playerName} from game ${socket.gameId} `);
       } catch (err) {
         console.error('Error cleaning up on disconnect:', err.message);
       }
@@ -1161,7 +1169,7 @@ setInterval(async () => {
             characterStats: inventory.stats || null
           }), inventory.characterId]
         );
-        console.log(`✓ Auto-saved inventory for character ${inventory.characterId}`);
+        console.log(`✓ Auto - saved inventory for character ${inventory.characterId}`);
       } catch (err) {
         console.error('Error auto-saving inventory:', err.message);
       }
