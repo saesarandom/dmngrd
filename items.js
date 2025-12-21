@@ -49,7 +49,14 @@ const BASE_ITEMS = {
     defense: 1,
     image: 'items/rags2.png'
   },
-
+  // Helm
+  helm: {
+    id: 'crude_helm',
+    name: 'Crude Helm',
+    type: ITEM_TYPES.HELM,
+    defense: 1,
+    image: 'items/crude_helm.png'
+  },
   // Shield
   wooden_shield: {
     id: 'wooden_shield',
@@ -133,7 +140,14 @@ function createItem(baseItemId, tier = 'NORMAL') {
   return item;
 }
 
-function generateEnemyDrop() {
+// Location-specific loot pools
+const LOCATION_LOOT = {
+  'outer_plains': ['crude_helm'], // Items that ONLY drop in Outer Plains
+  'deep_forest': [], // Add location-specific items here
+  'wilderness': [] // Default location
+};
+
+function generateEnemyDrop(location = 'wilderness') {
   const dropType = Math.random();
 
   // 33% chance for gold
@@ -145,10 +159,16 @@ function generateEnemyDrop() {
     };
   }
 
+  // Get available items for this location
+  const locationSpecificItems = LOCATION_LOOT[location] || [];
+  const generalItems = Object.keys(BASE_ITEMS).filter(
+    item => !Object.values(LOCATION_LOOT).flat().includes(item)
+  );
+  const availableItems = [...generalItems, ...locationSpecificItems];
+
   // 33% chance for normal item
   if (dropType < 0.66) {
-    const itemKeys = Object.keys(BASE_ITEMS);
-    const randomItem = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+    const randomItem = availableItems[Math.floor(Math.random() * availableItems.length)];
     return {
       type: 'item',
       item: createItem(randomItem, 'NORMAL')
@@ -157,8 +177,7 @@ function generateEnemyDrop() {
 
   // 33% chance for tiered item
   const tier = determineItemTier();
-  const itemKeys = Object.keys(BASE_ITEMS);
-  const randomItem = itemKeys[Math.floor(Math.random() * itemKeys.length)];
+  const randomItem = availableItems[Math.floor(Math.random() * availableItems.length)];
   return {
     type: 'item',
     item: createItem(randomItem, tier)

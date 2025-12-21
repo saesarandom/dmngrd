@@ -134,8 +134,9 @@ class Fight {
       });
     }
 
-    // Generate loot
-    const drop = generateEnemyDrop();
+    // Generate loot based on current location
+    const currentLocation = this.game.currentLocation || 'wilderness';
+    const drop = generateEnemyDrop(currentLocation);
 
     // Apply drops immediately, not in setTimeout
     if (drop.type === 'gold') {

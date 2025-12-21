@@ -284,7 +284,7 @@
         <div class="game-card">
           <h3>${game.name}</h3>
           <p>Creator: ${game.creator_name}</p>
-          <p>Seed: ${game.map_seed}</p>
+         
           ${game.password ? '<p>🔒 Password Protected</p>' : ''}
           ${!game.pvp_enabled ? '<p>⚔️ PVE Mode</p>' : '<p>⚔️ PVP Enabled</p>'}
           <button onclick="joinGame('${game.id}', ${game.password ? 'true' : 'false'})">Join Game</button>
@@ -333,8 +333,7 @@
     }
 
     function joinGame(gameId, hasPassword) {
-      const numGameId = parseInt(gameId);
-      const game = games.find(g => parseInt(g.id) === numGameId);
+      const game = games.find(g => g.id === gameId);
 
       if (!game) {
         console.error('Game not found:', gameId);
@@ -348,7 +347,7 @@
       }
 
       socket.emit('join_game', {
-        gameId: numGameId,
+        gameId: gameId,
         password: password,
         player: {
           name: character.name,
