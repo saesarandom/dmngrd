@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Affix/Suffix Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+
+        .item {
+            background: #2a2a2a;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid;
+        }
+
+        .magical {
+            border-color: #4a9eff;
+        }
+
+        .item-name {
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .prefix {
+            color: #88ff88;
+        }
+
+        .suffix {
+            color: #ffaa44;
+        }
+
+        button {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #6ab5ff;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Affix/Suffix System Test</h1>
+    <div>
+        <label>Monster Level: <input type="number" id="monsterLevel" value="15" min="1" max="133"></label>
+        <button onclick="generateItems()">Generate 10 Magical Items</button>
+    </div>
+    <div id="output"></div>
+
+    <script src="items.js"></script>
+    <script>
+        // Affix display format mapping
+        const AFFIX_DISPLAY_FORMATS = {
+            'increased_damage': (value) => `Increased Damage by ${value}%`,
+            'increased_speed': (value) => `Increased Speed by ${value}%`,
+            // Default format for stats without custom formatting
+            'default': (value, type) => {
+                const propName = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+                return `+${value} to ${propName}`;
+            }
+        };
+
+        function generateItems() {
+            const level = parseInt(document.getElementById('monsterLevel').value);
+            const output = document.getElementById('output');
+            output.innerHTML = '<h2>Generated Items (Monster Level ' + level + '):</h2>';
+
+            for (let i = 0; i < 10; i++) {
+                const item = createItem('blunt_sword', 'MAGICAL', level);
+
+                let itemHTML = '<div class="item magical">';
+                itemHTML += '<div class="item-name" style="color: ' + item.tierData.color + '">';
+
+                // Add prefix if exists
+                if (item.prefix) {
+                    itemHTML += '<span class="prefix">+' + item.prefix.value + ' ' + item.prefix.type + '</span> ';
+                }
+
+                itemHTML += item.name;
+
+                // Add suffix if exists
+                if (item.suffix) {
+                    itemHTML += ' <span class="suffix">of +' + item.suffix.value + ' ' + item.suffix.type + '</span>';
+                }
+
+                itemHTML += '</div>';
+                itemHTML += '<div>Damage: ' + item.damage + '</div>';
+
+                // Show modifiers
+                if (item.prefix || item.suffix) {
+                    itemHTML += '<div style="margin-top: 10px; font-size: 14px;">';
+                    if (item.prefix) {
+                        const formatter = AFFIX_DISPLAY_FORMATS[item.prefix.type] || AFFIX_DISPLAY_FORMATS['default'];
+                        const displayText = formatter(item.prefix.value, item.prefix.type);
+                        itemHTML += '<div class="prefix">' + displayText + ' (Req Level ' + item.prefix.levelReq + ')</div>';
+                    }
+                    if (item.suffix) {
+                        const formatter = AFFIX_DISPLAY_FORMATS[item.suffix.type] || AFFIX_DISPLAY_FORMATS['default'];
+                        const displayText = formatter(item.suffix.value, item.suffix.type);
+                        itemHTML += '<div class="suffix">' + displayText + ' (Req Level ' + item.suffix.levelReq + ')</div>';
+                    }
+                    itemHTML += '</div>';
+                }
+
+                itemHTML += '</div>';
+                output.innerHTML += itemHTML;
+            }
+        }
+
+        // Generate initial items
+        generateItems();
+    </script>
+</body>
+
+</html>

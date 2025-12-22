@@ -1,85 +1,85 @@
 // Character Sheet UI
 class CharacterSheet {
-    constructor(game, socket) {
-        this.game = game;
-        this.socket = socket;
-        this.isOpen = false;
-        this.experience = 0;
-        this.level = 1;
-        this.monstersKilled = 0;
-        this.deaths = 0;
-        this.stats = null;
+  constructor(game, socket) {
+    this.game = game;
+    this.socket = socket;
+    this.isOpen = false;
+    this.experience = 0;
+    this.level = 1;
+    this.monstersKilled = 0;
+    this.deaths = 0;
+    this.stats = null;
 
-        this.setupEventListeners();
-        this.createCharacterSheetUI();
-        this.setupSocketListeners();
-    }
+    this.setupEventListeners();
+    this.createCharacterSheetUI();
+    this.setupSocketListeners();
+  }
 
-    setupSocketListeners() {
-        // Listen for experience updates
-        this.socket.on('experience_updated', (data) => {
-            this.experience = data.experience || 0;
-            if (data.level) this.level = data.level;
-            if (data.monstersKilled !== undefined) this.monstersKilled = data.monstersKilled;
-            if (this.isOpen) {
-                this.render();
-            }
-        });
+  setupSocketListeners() {
+    // Listen for experience updates
+    this.socket.on('experience_updated', (data) => {
+      this.experience = data.experience || 0;
+      if (data.level) this.level = data.level;
+      if (data.monstersKilled !== undefined) this.monstersKilled = data.monstersKilled;
+      if (this.isOpen) {
+        this.render();
+      }
+    });
 
-        // Listen for inventory updates to get initial data
-        this.socket.on('inventory_updated', (data) => {
-            this.experience = data.experience || 0;
-            if (data.level) this.level = data.level;
-            if (data.monstersKilled !== undefined) this.monstersKilled = data.monstersKilled;
-            if (data.deaths !== undefined) this.deaths = data.deaths;
-            if (this.isOpen) {
-                this.render();
-            }
-        });
+    // Listen for inventory updates to get initial data
+    this.socket.on('inventory_updated', (data) => {
+      this.experience = data.experience || 0;
+      if (data.level) this.level = data.level;
+      if (data.monstersKilled !== undefined) this.monstersKilled = data.monstersKilled;
+      if (data.deaths !== undefined) this.deaths = data.deaths;
+      if (this.isOpen) {
+        this.render();
+      }
+    });
 
-        // Listen for stats updates
-        this.socket.on('stats_updated', (data) => {
-            if (data.monstersKilled !== undefined) this.monstersKilled = data.monstersKilled;
-            if (data.deaths !== undefined) this.deaths = data.deaths;
-            if (data.stats) this.stats = data.stats;
-            if (this.isOpen) {
-                this.render();
-            }
-        });
+    // Listen for stats updates
+    this.socket.on('stats_updated', (data) => {
+      if (data.monstersKilled !== undefined) this.monstersKilled = data.monstersKilled;
+      if (data.deaths !== undefined) this.deaths = data.deaths;
+      if (data.stats) this.stats = data.stats;
+      if (this.isOpen) {
+        this.render();
+      }
+    });
 
-        // Listen for level up
-        this.socket.on('level_up', (data) => {
-            this.level = data.level;
-            this.stats = data.totalStats;
+    // Listen for level up
+    this.socket.on('level_up', (data) => {
+      this.level = data.level;
+      this.stats = data.totalStats;
 
-            // Show level up message
-            const statGainsText = Object.entries(data.statGains)
-                .map(([stat, gain]) => `+${gain} ${stat}`)
-                .join(', ');
+      // Show level up message
+      const statGainsText = Object.entries(data.statGains)
+        .map(([stat, gain]) => `+${gain} ${stat}`)
+        .join(', ');
 
-            this.game.setMessage(`LEVEL UP! You are now level ${data.level}! ${statGainsText}`);
+      this.game.setMessage(`LEVEL UP! You are now level ${data.level}! ${statGainsText}`);
 
-            if (this.isOpen) {
-                this.render();
-            }
-        });
-    }
+      if (this.isOpen) {
+        this.render();
+      }
+    });
+  }
 
-    setupEventListeners() {
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'c' || e.key === 'C') {
-                this.toggle();
-            }
-            if (e.key === 'Escape' && this.isOpen) {
-                this.close();
-            }
-        });
-    }
+  setupEventListeners() {
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'c' || e.key === 'C') {
+        this.toggle();
+      }
+      if (e.key === 'Escape' && this.isOpen) {
+        this.close();
+      }
+    });
+  }
 
-    createCharacterSheetUI() {
-        const sheetDiv = document.createElement('div');
-        sheetDiv.id = 'characterSheetUI';
-        sheetDiv.style.cssText = `
+  createCharacterSheetUI() {
+    const sheetDiv = document.createElement('div');
+    sheetDiv.id = 'characterSheetUI';
+    sheetDiv.style.cssText = `
       position: fixed;
       top: 0;
       left: 0;
@@ -92,7 +92,7 @@ class CharacterSheet {
       overflow-y: auto;
     `;
 
-        sheetDiv.innerHTML = `
+    sheetDiv.innerHTML = `
       <div style="max-width: 800px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 40px;">
           <h1 style="color: #4aff4a; font-size: 36px; margin-bottom: 10px;">Character Sheet</h1>
@@ -202,56 +202,81 @@ class CharacterSheet {
       </div>
     `;
 
-        document.body.appendChild(sheetDiv);
-        this.sheetUI = sheetDiv;
+    document.body.appendChild(sheetDiv);
+    this.sheetUI = sheetDiv;
+  }
+
+  toggle() {
+    if (this.isOpen) {
+      this.close();
+    } else {
+      this.open();
+    }
+  }
+
+  open() {
+    this.isOpen = true;
+    this.sheetUI.style.display = 'block';
+    this.render();
+  }
+
+  close() {
+    this.isOpen = false;
+    this.sheetUI.style.display = 'none';
+  }
+
+  render() {
+    const character = this.game.character;
+
+    document.getElementById('charName').textContent = character.name || '-';
+    document.getElementById('charLevel').textContent = this.level;
+    document.getElementById('charExperience').textContent = this.experience;
+    document.getElementById('charClass').textContent = character.class || '-';
+    document.getElementById('charRace').textContent = character.race || '-';
+    document.getElementById('charMonstersKilled').textContent = this.monstersKilled;
+    document.getElementById('charDeaths').textContent = this.deaths;
+
+    // Calculate item bonuses from equipped items
+    const itemBonuses = {};
+    if (this.game.inventory && this.game.inventory.equipped) {
+      const equipped = this.game.inventory.equipped;
+
+      // Check all equipment slots
+      ['weapon', 'armor', 'helm', 'shield'].forEach(slot => {
+        const item = equipped[slot];
+        if (item) {
+          // Add prefix bonuses
+          if (item.prefix) {
+            itemBonuses[item.prefix.type] = (itemBonuses[item.prefix.type] || 0) + item.prefix.value;
+          }
+          // Add suffix bonuses
+          if (item.suffix) {
+            itemBonuses[item.suffix.type] = (itemBonuses[item.suffix.type] || 0) + item.suffix.value;
+          }
+        }
+      });
     }
 
-    toggle() {
-        if (this.isOpen) {
-            this.close();
+    // Display rolled stats with item bonuses
+    if (this.stats) {
+      const statNames = ['strength', 'dexterity', 'constitution', 'intelligence', 'luck',
+        'endurance', 'speed', 'perception', 'vitality', 'spirit',
+        'defense', 'charisma', 'resilience', 'forging'];
+
+      statNames.forEach(stat => {
+        const element = document.getElementById(`stat${stat.charAt(0).toUpperCase() + stat.slice(1)}`);
+        const baseStat = this.stats[stat] || 0;
+        const bonus = itemBonuses[stat] || 0;
+        const total = baseStat + bonus;
+
+        if (bonus > 0) {
+          // Show in bold gold if boosted by items
+          element.innerHTML = `<span style="color: #ffd700; font-weight: bold;">${total}</span>`;
         } else {
-            this.open();
+          // Normal display
+          element.textContent = baseStat;
         }
+      });
     }
-
-    open() {
-        this.isOpen = true;
-        this.sheetUI.style.display = 'block';
-        this.render();
-    }
-
-    close() {
-        this.isOpen = false;
-        this.sheetUI.style.display = 'none';
-    }
-
-    render() {
-        const character = this.game.character;
-
-        document.getElementById('charName').textContent = character.name || '-';
-        document.getElementById('charLevel').textContent = this.level;
-        document.getElementById('charExperience').textContent = this.experience;
-        document.getElementById('charClass').textContent = character.class || '-';
-        document.getElementById('charRace').textContent = character.race || '-';
-        document.getElementById('charMonstersKilled').textContent = this.monstersKilled;
-        document.getElementById('charDeaths').textContent = this.deaths;
-
-        // Display rolled stats (14 stats from character creation)
-        if (this.stats) {
-            document.getElementById('statStrength').textContent = this.stats.strength || 0;
-            document.getElementById('statDexterity').textContent = this.stats.dexterity || 0;
-            document.getElementById('statConstitution').textContent = this.stats.constitution || 0;
-            document.getElementById('statIntelligence').textContent = this.stats.intelligence || 0;
-            document.getElementById('statLuck').textContent = this.stats.luck || 0;
-            document.getElementById('statEndurance').textContent = this.stats.endurance || 0;
-            document.getElementById('statSpeed').textContent = this.stats.speed || 0;
-            document.getElementById('statPerception').textContent = this.stats.perception || 0;
-            document.getElementById('statVitality').textContent = this.stats.vitality || 0;
-            document.getElementById('statSpirit').textContent = this.stats.spirit || 0;
-            document.getElementById('statDefense').textContent = this.stats.defense || 0;
-            document.getElementById('statCharisma').textContent = this.stats.charisma || 0;
-            document.getElementById('statResilience').textContent = this.stats.resilience || 0;
-            document.getElementById('statForging').textContent = this.stats.forging || 0;
-        }
-    }
+  }
 }

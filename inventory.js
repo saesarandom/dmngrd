@@ -292,12 +292,81 @@ class Inventory {
     const tierColor = item.tierData.color;
     const stats = [];
 
-    if (item.damage) stats.push(`DMG: ${item.damage}`);
+    // Calculate increased_weapon_damage percentage from all equipped items
+    let weaponDamageBonus = 0;
+    if (item.type === 'weapon' && this.equipped) {
+      // Check all equipment slots (including weapon) for increased_weapon_damage
+      ['weapon', 'armor', 'helm', 'shield'].forEach(slot => {
+        const equippedItem = this.equipped[slot];
+        if (equippedItem) {
+          if (equippedItem.prefix && equippedItem.prefix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += equippedItem.prefix.value;
+          }
+          if (equippedItem.suffix && equippedItem.suffix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += equippedItem.suffix.value;
+          }
+        }
+      });
+
+      // If this weapon is NOT currently equipped, also check its own affixes
+      // since they would apply if it were equipped
+      if (this.equipped.weapon?.uniqueId !== item.uniqueId) {
+        if (item.prefix && item.prefix.type === 'increased_weapon_damage') {
+          weaponDamageBonus += item.prefix.value;
+        }
+        if (item.suffix && item.suffix.type === 'increased_weapon_damage') {
+          weaponDamageBonus += item.suffix.value;
+        }
+      }
+    }
+
+    // Apply weapon damage bonus to display
+    if (item.damage) {
+      const baseDamage = item.damage;
+      const modifiedDamage = weaponDamageBonus > 0
+        ? (baseDamage * (1 + weaponDamageBonus / 100)).toFixed(1)
+        : baseDamage;
+      stats.push(`DMG: ${modifiedDamage}`);
+    }
+
     if (item.defense) stats.push(`DEF: ${item.defense}`);
     if (item.speed) stats.push(`SPD: ${item.speed}`);
     if (item.blockChance) stats.push(`Block: ${(item.blockChance * 100).toFixed(0)}%`);
 
     const hasImage = item.image && item.image !== '';
+
+    // Affix display format mapping
+    const AFFIX_DISPLAY_FORMATS = {
+      'increased_damage': (value) => `Increased Damage by ${value}%`,
+      'increased_weapon_damage': (value) => `Increased Weapon Damage by ${value}%`,
+      'increased_speed': (value) => `Increased Speed by ${value}%`,
+      // Default format for stats without custom formatting
+      'default': (value, type) => {
+        const propName = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+        return `+${value} to ${propName}`;
+      }
+    };
+
+    // Build affix display
+    let affixHTML = '';
+    if (item.prefix) {
+      const formatter = AFFIX_DISPLAY_FORMATS[item.prefix.type] || AFFIX_DISPLAY_FORMATS['default'];
+      const displayText = typeof formatter === 'function'
+        ? formatter(item.prefix.value, item.prefix.type)
+        : formatter;
+      affixHTML += `<div style="color: #88ff88; font-size: ${isEquipment ? '11px' : '10px'}; margin-top: 3px;">
+        ${displayText}
+      </div>`;
+    }
+    if (item.suffix) {
+      const formatter = AFFIX_DISPLAY_FORMATS[item.suffix.type] || AFFIX_DISPLAY_FORMATS['default'];
+      const displayText = typeof formatter === 'function'
+        ? formatter(item.suffix.value, item.suffix.type)
+        : formatter;
+      affixHTML += `<div style="color: #ffaa44; font-size: ${isEquipment ? '11px' : '10px'}; margin-top: 3px;">
+        ${displayText}
+      </div>`;
+    }
 
     return `
     <div style="width: 100%; text-align: ${isEquipment ? 'left' : 'center'}; display: flex; ${isEquipment ? 'flex-direction: row; align-items: center; gap: 10px;' : 'flex-direction: column; align-items: center;'}">
@@ -306,17 +375,19 @@ class Inventory {
              style="width: ${isEquipment ? '40px' : '100%'}; height: ${isEquipment ? '40px' : 'auto'}; max-height: ${isEquipment ? '40px' : '60px'}; object-fit: contain; image-rendering: pixelated;"
              onerror="this.style.display='none'"
         />
-      ` : ''}
-      <div style="flex: 1;">
-        <div style="color: ${tierColor}; font-size: ${isEquipment ? '14px' : '12px'}; font-weight: bold; margin-bottom: 5px;">
-          ${item.name}
-        </div>
-        ${item.tier !== 'NORMAL' ? `<div style="color: ${tierColor}; font-size: 10px; margin-bottom: 5px;">${item.tierData.name}</div>` : ''}
-        <div style="color: #888; font-size: ${isEquipment ? '12px' : '10px'};">
-          ${stats.join(' | ')}
-        </div>
+      ` : ''
+      }
+    <div style="flex: 1;">
+      <div style="color: ${tierColor}; font-size: ${isEquipment ? '14px' : '12px'}; font-weight: bold; margin-bottom: 5px;">
+        ${item.name}
       </div>
+      ${item.tier !== 'NORMAL' ? `<div style="color: ${tierColor}; font-size: 10px; margin-bottom: 5px;">${item.tierData.name}</div>` : ''}
+      <div style="color: #888; font-size: ${isEquipment ? '12px' : '10px'};">
+        ${stats.join(' | ')}
+      </div>
+      ${affixHTML}
     </div>
-  `;
+    </div >
+      `;
   }
 }

@@ -515,6 +515,17 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Chat message broadcasting
+  socket.on('chat_message', (data) => {
+    const { gameId, playerName, text } = data;
+    // Broadcast to all players in the game (including sender)
+    io.to(`game_${gameId} `).emit('chat_message', {
+      playerName,
+      text,
+      timestamp: Date.now()
+    });
+  });
+
   // ===== SERVER-AUTHORITATIVE INVENTORY HANDLERS =====
 
   socket.on('inventory_pickup_item', (data) => {

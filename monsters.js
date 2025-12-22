@@ -140,6 +140,31 @@ const FamiliarPrototype = {
   }
 };
 
+const MountainGiantPrototype = {
+  id: 'mountain_giant',
+  name: 'Mountain Giant',
+  level: 8,
+  damage: 6,
+  defense: 6,
+  block: 10,
+  hp: 46,
+  color: '#ff4a4a',
+  experience: 56,
+  resistances: {
+    physical: 0,
+    fire: 0.15,
+    cold: 0,
+    lightning: 0,
+    poison: 0,
+    magic: 0,
+    curse: 0,
+    dot: 0,
+  },
+  drops: {
+    goldMin: 31,
+    goldMax: 37
+  }
+};
 function createMonster(prototype) {
   return new Monster(JSON.parse(JSON.stringify(prototype)));
 }
@@ -149,8 +174,8 @@ const ZONE_LEVELS = {
   'wilderness': 1,
   'outer_plains': 3,
   'deep_forest': 5,
-  'mountain_pass': 7,
-  'dark_caverns': 10
+  'mountain_range': 8,
+  'dark_caverns': 12 //16, 20 a pak asi po dvou
 };
 
 function getZoneLevel(mapType) {
@@ -160,7 +185,9 @@ function getZoneLevel(mapType) {
 function getRandomMonster(mapType = 'wilderness') {
   let monsters;
 
-  if (mapType === 'deep_forest') {
+  if (mapType === 'mountain_range') {
+    monsters = [MountainGiantPrototype];
+  } else if (mapType === 'deep_forest') {
     monsters = [FamiliarPrototype];
   } else if (mapType === 'outer_plains') {
     monsters = [ArmedVillagerPrototype];

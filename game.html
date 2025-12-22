@@ -87,19 +87,70 @@
       left: 50%;
       transform: translateX(-50%);
       width: 600px;
-      min-height: 120px;
+      height: 250px;
       background-color: rgba(26, 26, 26, 0.95);
       border: 2px solid #333;
       border-radius: 4px;
-      padding: 20px;
       color: #fff;
-      font-size: 16px;
+      font-size: 14px;
       display: none;
+      flex-direction: column;
     }
 
     #messageBox.show {
-      display: block;
+      display: flex;
     }
+
+    #messageList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #444;
+    }
+
+    .chat-message {
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .chat-message .sender {
+      font-weight: bold;
+      color: #4aff4a;
+      margin-right: 5px;
+    }
+
+    .chat-message .system {
+      font-weight: bold;
+      color: #ffff4a;
+      margin-right: 5px;
+    }
+
+    .chat-message .text {
+      color: #fff;
+    }
+
+    #messageInputContainer {
+      padding: 0 10px 10px 10px;
+    }
+
+    #messageInput {
+      flex: 1;
+      background-color: rgba(0, 0, 0, 0.5);
+      border: 1px solid #555;
+      border-radius: 3px;
+      padding: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-family: Arial, sans-serif;
+    }
+
+    #messageInput:focus {
+      outline: none;
+      border-color: #4aff4a;
+    }
+
+
 
     #party-ui {
       position: fixed;
@@ -173,7 +224,12 @@
 
 <body>
   <canvas id="gameCanvas"></canvas>
-  <div id="messageBox"></div>
+  <div id="messageBox">
+    <div id="messageList"></div>
+    <div id="messageInputContainer">
+      <input type="text" id="messageInput" placeholder="Type a message and press Enter..." maxlength="200">
+    </div>
+  </div>
   <div id="resolutionMenu">
     <h2>Select Resolution</h2>
     <button class="resolution-btn" data-res="16">16x16 px</button>
@@ -329,6 +385,11 @@
           game.otherPlayers.push(player);
           game.render();
         }
+      });
+
+      // Handle chat messages
+      socket.on('chat_message', (data) => {
+        game.setMessage(data.text, data.playerName);
       });
 
       // Handle map events from other players (enemy kills, trap activations, etc.)

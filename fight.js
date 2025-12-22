@@ -11,7 +11,7 @@ class Fight {
 
     const enemy = this.game.enemies[enemyIndex];
 
-    this.currentEnemy = enemy.monsterData || getRandomMonster();
+    this.currentEnemy = enemy.monsterData || getRandomMonster(enemy.mapType || this.game.currentMapType);
 
     // Store enemy position for later
     this.currentEnemyPos = { x: enemyX, y: enemyY };
@@ -33,9 +33,29 @@ class Fight {
     let defense = stats.defense || 0;
     let blockChance = 0;
 
-    // Add weapon damage
+    // Calculate increased_weapon_damage percentage from all equipped items
+    let weaponDamageBonus = 0;
+    if (inventory.equipped) {
+      ['weapon', 'armor', 'helm', 'shield'].forEach(slot => {
+        const equippedItem = inventory.equipped[slot];
+        if (equippedItem) {
+          if (equippedItem.prefix && equippedItem.prefix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += equippedItem.prefix.value;
+          }
+          if (equippedItem.suffix && equippedItem.suffix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += equippedItem.suffix.value;
+          }
+        }
+      });
+    }
+
+    // Add weapon damage with percentage modifier
     if (inventory.equipped.weapon) {
-      damage += inventory.equipped.weapon.damage || 0;
+      const baseDamage = inventory.equipped.weapon.damage || 0;
+      const modifiedDamage = weaponDamageBonus > 0
+        ? baseDamage * (1 + weaponDamageBonus / 100)
+        : baseDamage;
+      damage += modifiedDamage;
     }
 
     // Add armor defense
@@ -134,9 +154,10 @@ class Fight {
       });
     }
 
-    // Generate loot based on current location
+    // Generate loot based on current location and enemy level
     const currentLocation = this.game.currentLocation || 'wilderness';
-    const drop = generateEnemyDrop(currentLocation);
+    const enemyLevel = enemy.level || 1;
+    const drop = generateEnemyDrop(currentLocation, enemyLevel);
 
     // Apply drops immediately, not in setTimeout
     if (drop.type === 'gold') {

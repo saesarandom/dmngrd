@@ -16,6 +16,7 @@ class Game {
     this.exits = [];
     this.player = { x: 0, y: 0 };
     this.message = '';
+    this.messages = []; // Chat message history
     this.hoveredEnemy = null;
     this.inTown = false;
     this.currentTown = null;
@@ -24,6 +25,7 @@ class Game {
     this.setupCanvas();
     this.setupEventListeners();
     this.setupMouseTracking();
+    this.setupChatHandlers();
   }
 
   setupCanvas() {
@@ -116,11 +118,60 @@ class Game {
     this.closeResolutionMenu();
   }
 
-  setMessage(text) {
+  setMessage(text, sender = 'System') {
     this.message = text;
+    this.messages.push({ text, sender, timestamp: Date.now() });
+
     const messageBox = document.getElementById('messageBox');
-    messageBox.textContent = text;
+    const messageList = document.getElementById('messageList');
+
+    // Create message element
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'chat-message';
+
+    const senderSpan = document.createElement('span');
+    senderSpan.className = sender === 'System' ? 'system' : 'sender';
+    senderSpan.textContent = sender + ':';
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'text';
+    textSpan.textContent = text;
+
+    msgDiv.appendChild(senderSpan);
+    msgDiv.appendChild(textSpan);
+    messageList.appendChild(msgDiv);
+
+    // Auto-scroll to bottom
+    messageList.scrollTop = messageList.scrollHeight;
+
     messageBox.classList.add('show');
+  }
+
+  setupChatHandlers() {
+    const messageInput = document.getElementById('messageInput');
+
+    const sendMessage = () => {
+      const text = messageInput.value.trim();
+      if (text && this.socket) {
+        this.socket.emit('chat_message', {
+          gameId: this.gameId,
+          playerName: this.character.name,
+          text: text
+        });
+        messageInput.value = '';
+      }
+    };
+
+    // Prevent game hotkeys from triggering while typing in chat
+    messageInput.addEventListener('keydown', (e) => {
+      // Stop event from bubbling up to game handlers
+      e.stopPropagation();
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
   }
 
   checkTrap(x, y) {
