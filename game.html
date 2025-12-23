@@ -330,7 +330,7 @@
 
       // Handle forced lobby redirect (from auto-cleanup)
       socket.on('force_lobby', (data) => {
-        alert(data.message || 'Returning to lobby...');
+        console.log('Forced to lobby:', data.message || 'Returning to lobby...');
         window.location.href = 'lobby.html';
       });
 

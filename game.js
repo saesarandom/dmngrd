@@ -152,6 +152,13 @@ class Game {
 
     const sendMessage = () => {
       const text = messageInput.value.trim();
+
+      // Check if it's a bot command - don't send to server
+      if (text.startsWith('/skip ') || text === '/skip off' || text === '/skip cancel') {
+        // Let the simulator handle it
+        return;
+      }
+
       if (text && this.socket) {
         this.socket.emit('chat_message', {
           gameId: this.gameId,

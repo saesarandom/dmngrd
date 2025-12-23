@@ -218,6 +218,31 @@ const AdventurerPrototype = {
   }
 };
 
+const MinotaurPrototype = {
+  id: 'minotaur',
+  name: 'Minotaur',
+  level: 23,
+  damage: 12,
+  defense: 12,
+  block: 16,
+  hp: 104,
+  color: '#ff4a4a',
+  experience: 103,
+  resistances: {
+    physical: 0.12,
+    fire: 0,
+    cold: 0,
+    lightning: 0.23,
+    poison: 0.0,
+    magic: 0,
+    curse: 0,
+    dot: 0.2,
+  },
+  drops: {
+    goldMin: 75,
+    goldMax: 95
+  }
+};
 function createMonster(prototype) {
   return new Monster(JSON.parse(JSON.stringify(prototype)));
 }
@@ -228,7 +253,8 @@ const ZONE_LEVELS = {
   'outer_plains': 3,
   'deep_forest': 5,
   'mountain_range': 8,
-  'caverns': 12 //16, 20 a pak asi po dvou
+  'caverns': 12,
+  'inner_prison': 16
 };
 
 function getZoneLevel(mapType) {
@@ -246,6 +272,8 @@ function getRandomMonster(mapType = 'wilderness') {
     monsters = [FamiliarPrototype];
   } else if (mapType === 'outer_plains') {
     monsters = [ArmedVillagerPrototype];
+  } else if (mapType === 'inner_prison') {
+    monsters = [MinotaurPrototype];
   } else {
     // wilderness or default
     monsters = [RottenPrototype, FluffySlimePrototype];

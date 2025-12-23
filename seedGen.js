@@ -51,7 +51,7 @@ function initializeGameWithSeed(seed, gridSize = 30, mapType = 'wilderness') {
 
   // Generate exit portal on edge for wilderness maps
   const exits = [];
-  if (mapType === 'wilderness' || mapType === 'outer_plains' || mapType === 'deep_forest' || mapType === 'mountain_range') {
+  if (mapType === 'wilderness' || mapType === 'outer_plains' || mapType === 'deep_forest' || mapType === 'mountain_range' || mapType === 'caverns') {
     const rng2 = new Math.seedrandom(seed + '_exit_' + mapType);
     const edge = Math.floor(rng2() * 4);
     let exitX, exitY;
@@ -94,6 +94,8 @@ function getNextMapType(currentMap) {
     return { gridSize: 42, mapType: 'mountain_range', displayName: 'Mountain Range' };
   } else if (currentMap === 'mountain_range') {
     return { gridSize: 46, mapType: 'caverns', displayName: 'Caverns' };
+  } else if (currentMap === 'caverns') {
+    return { gridSize: 50, mapType: 'inner_prison', displayName: 'Inner Prison' };
   }
   return { gridSize: 30, mapType: 'wilderness', displayName: 'Wilderness' };
 }

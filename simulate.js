@@ -1,12 +1,18 @@
 class Simulator {
   constructor(game, movement) {
+    console.log('Simulator constructor called');
     this.game = game;
     this.movement = movement;
     this.isSimulating = false;
     this.simulationInterval = null;
     this.strategy = 'hunt'; // 'hunt', 'explore', 'avoid'
+    this.autoRejoin = false;
+    this.skipMode = false;
+    this.targetZone = null;
 
     this.setupEventListeners();
+    this.checkAutoStart();
+    this.setupChatCommandListener();
   }
 
   setupEventListeners() {
@@ -15,7 +21,143 @@ class Simulator {
         e.preventDefault();
         this.toggleSimulation();
       }
+      // Ctrl+Shift+B to toggle auto-rejoin
+      if (e.ctrlKey && e.shiftKey && e.key === 'B') {
+        e.preventDefault();
+        this.toggleAutoRejoin();
+      }
     });
+  }
+
+  checkAutoStart() {
+    console.log('=== checkAutoStart called ===');
+    // Check if bot should auto-start after page refresh
+    const botState = localStorage.getItem('botState');
+    console.log('botState from localStorage:', botState);
+    if (botState) {
+      const state = JSON.parse(botState);
+
+      // Restore autoRejoin state FIRST
+      if (state.autoRejoin) {
+        this.autoRejoin = true;
+      }
+
+      // Restore skip mode if it was active
+      if (state.skipMode && state.targetZone) {
+        this.skipMode = true;
+        this.targetZone = state.targetZone;
+      }
+
+      if (state.isSimulating) {
+        // Small delay to ensure game is fully loaded
+        setTimeout(() => {
+          this.start();
+          if (this.autoRejoin) {
+            this.game.setMessage('Bot auto-started with auto-rejoin enabled');
+          } else {
+            this.game.setMessage('Bot auto-started');
+          }
+
+          // Show skip mode status if active
+          if (this.skipMode && this.targetZone) {
+            this.game.setMessage(`Skip mode active - rushing to ${this.targetZone}`);
+          }
+        }, 1000);
+      }
+    }
+  }
+
+  toggleAutoRejoin() {
+    this.autoRejoin = !this.autoRejoin;
+
+    if (this.autoRejoin) {
+      this.game.setMessage('Auto-rejoin enabled - Bot will restart on death');
+      // Save state
+      this.saveBotState();
+    } else {
+      this.game.setMessage('Auto-rejoin disabled');
+      // Clear auto-rejoin from saved state
+      localStorage.removeItem('botAutoJoin');
+      this.saveBotState();
+    }
+  }
+
+  saveBotState() {
+    const state = {
+      isSimulating: this.isSimulating,
+      autoRejoin: this.autoRejoin,
+      skipMode: this.skipMode,
+      targetZone: this.targetZone
+    };
+    localStorage.setItem('botState', JSON.stringify(state));
+  }
+
+  setupChatCommandListener() {
+    // Listen for chat input to intercept commands
+    const attachListener = () => {
+      const messageInput = document.getElementById('messageInput');
+      if (messageInput) {
+        messageInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            const message = messageInput.value.trim();
+            console.log('Chat message detected:', message);
+
+            // Check if it's a bot command
+            if (message.startsWith('/skip ')) {
+              e.preventDefault();
+              console.log('Skip command detected!');
+              const zoneName = message.substring(6).trim();
+              this.setSkipMode(zoneName);
+              messageInput.value = '';
+            } else if (message === '/skip off' || message === '/skip cancel') {
+              e.preventDefault();
+              console.log('Skip cancel command detected!');
+              this.cancelSkipMode();
+              messageInput.value = '';
+            }
+          }
+        });
+        console.log('Chat command listener attached successfully');
+      } else {
+        // Retry after delay if element not found
+        console.log('messageInput not found, retrying...');
+        setTimeout(attachListener, 500);
+      }
+    };
+
+    attachListener();
+  }
+
+  setSkipMode(zoneName) {
+    // Normalize zone name
+    const zoneMap = {
+      'wilderness': 'Wilderness',
+      'outer plains': 'Outer Plains',
+      'deep forest': 'Deep Forest',
+      'mountain range': 'Mountain Range',
+      'caverns': 'Caverns',
+      'inner prison': 'Inner Prison'
+    };
+
+    const normalizedZone = zoneMap[zoneName.toLowerCase()];
+
+    if (!normalizedZone) {
+      this.game.setMessage(`Unknown zone: ${zoneName}. Available: Wilderness, Outer Plains, Deep Forest, Mountain Range, Caverns, Inner Prison`);
+      return;
+    }
+
+    this.skipMode = true;
+    this.targetZone = normalizedZone;
+    this.saveBotState(); // Save to persist across restarts
+    console.log('Skip mode saved to localStorage:', { skipMode: this.skipMode, targetZone: this.targetZone });
+    this.game.setMessage(`Skip mode enabled - rushing to ${normalizedZone}`);
+  }
+
+  cancelSkipMode() {
+    this.skipMode = false;
+    this.targetZone = null;
+    this.saveBotState(); // Save to persist the cancellation
+    this.game.setMessage('Skip mode disabled - resuming normal hunting');
   }
 
   toggleSimulation() {
@@ -29,6 +171,7 @@ class Simulator {
   start() {
     this.isSimulating = true;
     this.game.setMessage('Simulation started - Bot is now playing');
+    this.saveBotState();
 
     this.simulationInterval = setInterval(() => {
       this.makeMove();
@@ -42,6 +185,7 @@ class Simulator {
       this.simulationInterval = null;
     }
     this.game.setMessage('Simulation stopped - Manual control restored');
+    this.saveBotState();
   }
 
   makeMove() {
@@ -53,7 +197,46 @@ class Simulator {
       return;
     }
 
-    // In wilderness - hunt enemies
+    // Check if we've reached target zone in skip mode
+    if (this.skipMode && this.targetZone) {
+      // Get current zone - use currentMapType (e.g., 'caverns')
+      const currentMapType = this.game.currentMapType || 'wilderness';
+
+      // Convert targetZone displayName to mapType for comparison
+      const zoneToMapType = {
+        'Wilderness': 'wilderness',
+        'Outer Plains': 'outer_plains',
+        'Deep Forest': 'deep_forest',
+        'Mountain Range': 'mountain_range',
+        'Caverns': 'caverns',
+        'Inner Prison': 'inner_prison'
+      };
+
+      const targetMapType = zoneToMapType[this.targetZone];
+
+      if (currentMapType === targetMapType) {
+        // Disable skip mode for this session (but keep it saved for next game)
+        if (this.skipMode) {
+          this.skipMode = false; // Stop skipping in THIS game session
+          this.game.setMessage(`Reached ${this.targetZone} - resuming normal hunting`);
+          // Don't save state here - targetZone stays in localStorage for next game
+        }
+      }
+    }
+
+    // In skip mode - prioritize exits, ignore enemies
+    if (this.skipMode) {
+      if (this.game.exits && this.game.exits.length > 0) {
+        const exit = this.game.exits[0];
+        this.moveTowards(exit.x, exit.y);
+      } else {
+        // No exit found, explore to find it
+        this.exploreRandomly();
+      }
+      return;
+    }
+
+    // Normal hunting mode - hunt enemies
     const nearestEnemy = this.findNearestEnemy();
 
     if (nearestEnemy) {
@@ -64,8 +247,18 @@ class Simulator {
         const exit = this.game.exits[0];
         this.moveTowards(exit.x, exit.y);
       } else {
-        // No exit available (e.g., final zone), explore randomly
-        this.exploreRandomly();
+        // No exit available and no enemies - zone is cleared
+        // If auto-rejoin is enabled, leave and restart
+        if (this.autoRejoin) {
+          console.log('Zone cleared - no enemies or exits. Auto-rejoining...');
+          localStorage.setItem('botAutoJoin', 'true');
+          setTimeout(() => {
+            window.location.href = '/lobby.html';
+          }, 1000);
+        } else {
+          // Just explore randomly if auto-rejoin is disabled
+          this.exploreRandomly();
+        }
       }
     }
   }

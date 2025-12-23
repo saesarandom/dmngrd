@@ -113,10 +113,6 @@ class Fight {
     const totalPower = playerPower + enemyPower;
     const winChance = totalPower > 0 ? playerPower / totalPower : 0.5;
 
-    console.log('Player Power:', playerPower);
-    console.log('Enemy Power:', enemyPower);
-    console.log('Win Chance:', (winChance * 100).toFixed(1) + '%');
-
 
     const roll = Math.random();
 
@@ -191,12 +187,8 @@ class Fight {
     this.game.setMessage(`Defeat! ${enemy.name} has bested you in combat!`);
 
     // Track death
-    console.log('Player died, emitting player_death event');
     if (this.game.socket && this.game.socket.connected) {
       this.game.socket.emit('player_death', {});
-      console.log('player_death event emitted');
-    } else {
-      console.error('Socket not connected, cannot emit player_death');
     }
 
     // Later: handle player death, respawn, etc.

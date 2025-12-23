@@ -217,6 +217,9 @@
       console.log('Games updated:', updatedGames.length);
       games = updatedGames;
       renderGames();
+
+      // Check if bot should auto-join first game
+      checkAutoJoin();
     });
 
     socket.on('game_created', (game) => {
@@ -230,7 +233,7 @@
         players: game.players
       };
       localStorage.setItem('currentGame', JSON.stringify(gameInfo));
-      alert('Game created! Redirecting...');
+      console.log('Redirecting to game...');
       window.location.href = '/game.html';
     });
 
@@ -244,18 +247,41 @@
         players: game.players
       };
       localStorage.setItem('currentGame', JSON.stringify(gameInfo));
-      alert('Joined game! Redirecting...');
+      console.log('Redirecting to game...');
       window.location.href = '/game.html';
     });
 
     socket.on('error', (err) => {
-      alert('Error: ' + err.message);
+      console.error('Socket error:', err.message);
     });
 
     function updateStatus(msg, connected) {
       const status = document.getElementById('status');
       status.textContent = (connected ? '●' : '●') + ' ' + msg;
       status.classList.toggle('connected', connected);
+    }
+
+    function checkAutoJoin() {
+      // Check if bot should auto-join first game
+      const autoJoin = localStorage.getItem('botAutoJoin');
+      if (autoJoin === 'true' && games && games.length > 0) {
+        console.log('Auto-join triggered - joining first game');
+        localStorage.removeItem('botAutoJoin'); // Clear flag
+
+        // Join first game in list (without password)
+        const firstGame = games[0];
+
+        // Skip password-protected games
+        if (firstGame.password) {
+          console.log('First game is password protected, skipping auto-join');
+          return;
+        }
+
+        // Auto-join after a short delay
+        setTimeout(() => {
+          joinGame(firstGame.id, false);
+        }, 500);
+      }
     }
 
     function loadGames() {
@@ -265,6 +291,7 @@
           games = data || [];
           console.log('Games loaded:', games.length);
           renderGames();
+          checkAutoJoin(); // Check after loading games
         })
         .catch(err => {
           console.error('Failed to load games:', err);
@@ -306,7 +333,7 @@
       const pvp = document.getElementById('pvpCheck').checked;
 
       if (!name) {
-        alert('Enter game name');
+        console.error('Game name required');
         return;
       }
 
