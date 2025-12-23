@@ -404,15 +404,12 @@
 
         if (location !== currentLocation) return;
 
-        console.log(`[Map Event] Received ${type} at (${x}, ${y}) from ${playerName}`);
-
         if (type === 'enemy_killed') {
           // Remove enemy from our local map
           const enemyIndex = game.enemies.findIndex(e => e.x === x && e.y === y);
           if (enemyIndex !== -1) {
             game.enemies.splice(enemyIndex, 1);
             game.render();
-            console.log(`[Map Event] Removed enemy at (${x}, ${y})`);
           }
         }
       });

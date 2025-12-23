@@ -165,6 +165,59 @@ const MountainGiantPrototype = {
     goldMax: 37
   }
 };
+
+const DrakelingPrototype = {
+  id: 'drakeling',
+  name: 'Drakeling',
+  level: 12,
+  damage: 8,
+  defense: 8,
+  block: 13,
+  hp: 66,
+  color: '#ff4a4a',
+  experience: 66,
+  resistances: {
+    physical: 0,
+    fire: 0.10,
+    cold: 0.10,
+    lightning: 0,
+    poison: 0,
+    magic: 0,
+    curse: 0,
+    dot: 0,
+  },
+  drops: {
+    goldMin: 51,
+    goldMax: 59
+  }
+};
+
+const AdventurerPrototype = {
+  id: 'adventurer',
+  name: 'Adventurer',
+  level: 12,
+  damage: 9,
+  defense: 8,
+  block: 14,
+  hp: 86,
+  color: '#ff4a4a',
+  experience: 81,
+  resistances: {
+    physical: 0,
+    fire: 0.10,
+    cold: 0.10,
+    lightning: 0.05,
+    poison: 0.05,
+    magic: 0,
+    curse: 0,
+    dot: 0,
+  },
+  drops: {
+    goldMin: 63,
+    goldMax: 75
+  }
+};
+
 function createMonster(prototype) {
   return new Monster(JSON.parse(JSON.stringify(prototype)));
 }
@@ -175,7 +228,7 @@ const ZONE_LEVELS = {
   'outer_plains': 3,
   'deep_forest': 5,
   'mountain_range': 8,
-  'dark_caverns': 12 //16, 20 a pak asi po dvou
+  'caverns': 12 //16, 20 a pak asi po dvou
 };
 
 function getZoneLevel(mapType) {
@@ -187,6 +240,8 @@ function getRandomMonster(mapType = 'wilderness') {
 
   if (mapType === 'mountain_range') {
     monsters = [MountainGiantPrototype];
+  } else if (mapType === 'caverns') {
+    monsters = [DrakelingPrototype, AdventurerPrototype];
   } else if (mapType === 'deep_forest') {
     monsters = [FamiliarPrototype];
   } else if (mapType === 'outer_plains') {

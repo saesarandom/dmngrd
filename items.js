@@ -1,7 +1,7 @@
 const ITEM_TIERS = {
   NORMAL: { name: 'Normal', color: '#888888', dropChance: 0 },
-  MAGICAL: { name: 'Magical', color: '#4a9eff', dropChance: 1 / 1.1 },
-  RARE: { name: 'Rare', color: '#ffff4a', dropChance: 1 / 20 },
+  MAGICAL: { name: 'Magical', color: '#4a9eff', dropChance: 1 / 2 },
+  RARE: { name: 'Rare', color: '#ffff4a', dropChance: 1 / 10 },
   COMPOUND: { name: 'Compound', color: '#ff8800', dropChance: 1 / 100 },
   UNIQUE: { name: 'Unique', color: '#ff4aff', dropChance: 1 / 1000 },
   LEGENDARY: { name: 'Legendary', color: '#ff4a4a', dropChance: 1 / 10000 }
@@ -333,6 +333,14 @@ const BASE_ITEMS = {
     speed: 1.2,
     image: 'items/blunt_sword2.png'
   },
+  pike: {
+    id: 'pike',
+    name: 'Pike',
+    type: ITEM_TYPES.WEAPON,
+    damage: 10,
+    speed: 0.9,
+    image: 'items/blunt_sword2.png'
+  },
 
   // Armor
   rags: {
@@ -342,12 +350,26 @@ const BASE_ITEMS = {
     defense: 1,
     image: 'items/rags2.png'
   },
+  plate_mail: {
+    id: 'plate_mail',
+    name: 'Plate Mail',
+    type: ITEM_TYPES.ARMOR,
+    defense: 4,
+    image: 'items/rags2.png'
+  },
   // Helm
   crude_helm: {
     id: 'crude_helm',
     name: 'Crude Helm',
     type: ITEM_TYPES.HELM,
     defense: 1,
+    image: 'items/crude_helm.png'
+  },
+  plate_helmet: {
+    id: 'plate_helmet',
+    name: 'Plate Helmet',
+    type: ITEM_TYPES.HELM,
+    defense: 4,
     image: 'items/crude_helm.png'
   },
   // Shield
@@ -630,15 +652,19 @@ const LOCATION_LOOT = {
   'wilderness': ['rags', 'wooden_shield', 'scepter', 'small_dagger', 'blunt_sword'],
   'outer_plains': ['crude_helm', 'rags', 'blunt_sword'],
   'deep_forest': ['wooden_shield', 'scepter', 'crude_helm'],
-  'mountain_range': ['large_shield', 'short_bow']
+  'mountain_range': ['large_shield', 'short_bow'],
+  'caverns': ['plate_mail', 'pike', 'plate_helmet'],
 };
 
-function generateEnemyDrop(location = 'wilderness', monsterLevel = 1) {
+function generateEnemyDrop(location = 'wilderness', monsterLevel = 1, enemyDrops = null) {
   const dropType = Math.random();
 
   // 33% chance for gold
   if (dropType < 0.33) {
-    const goldAmount = Math.floor(Math.random() * 6) + 6; // 6-11 gold
+    // Use enemy-specific gold drops if available, otherwise use default
+    const goldMin = enemyDrops?.goldMin ?? 6;
+    const goldMax = enemyDrops?.goldMax ?? 11;
+    const goldAmount = Math.floor(Math.random() * (goldMax - goldMin + 1)) + goldMin;
     return {
       type: 'gold',
       amount: goldAmount

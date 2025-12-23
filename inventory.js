@@ -374,8 +374,21 @@ class Inventory {
           </div>
         `;
 
-        // Full details in tooltip
-        slot.title = this.renderItemTooltip(item);
+        // Custom tooltip on hover
+        slot.onmouseenter = (e) => {
+          this.tooltip.innerHTML = this.renderItemTooltipHTML(item);
+          this.tooltip.style.display = 'block';
+        };
+
+        slot.onmousemove = (e) => {
+          this.tooltip.style.left = (e.clientX + 15) + 'px';
+          this.tooltip.style.top = (e.clientY + 15) + 'px';
+        };
+
+        slot.onmouseleave = () => {
+          this.tooltip.style.display = 'none';
+        };
+
         slot.style.cursor = 'pointer';
 
         // Left click to equip
@@ -395,7 +408,9 @@ class Inventory {
         };
       } else {
         slot.innerHTML = '';
-        slot.title = '';
+        slot.onmouseenter = null;
+        slot.onmousemove = null;
+        slot.onmouseleave = null;
         slot.style.cursor = 'default';
         slot.onclick = null;
         slot.oncontextmenu = null;
@@ -466,6 +481,73 @@ class Inventory {
     });
 
     return tooltip;
+  }
+
+  renderItemTooltipHTML(item) {
+    if (!item || !item.tierData) return '';
+
+    const tierColor = item.tierData.color;
+    let html = `<div style="color: ${tierColor}; font-weight: bold; margin-bottom: 5px;">${item.name}</div>`;
+    html += `<div style="color: ${tierColor}; font-size: 11px; margin-bottom: 8px;">${item.tierData.name}</div>`;
+
+    // Add stats
+    if (item.damage) html += `<div style="color: #fff;">DMG: ${item.damage}</div>`;
+    if (item.defense) html += `<div style="color: #fff;">DEF: ${item.defense}</div>`;
+    if (item.speed) html += `<div style="color: #fff;">SPD: ${item.speed}</div>`;
+    if (item.blockChance) html += `<div style="color: #fff;">Block: ${(item.blockChance * 100).toFixed(0)}%</div>`;
+
+    // Add affixes
+    const prefixes = item.prefixes || (item.prefix ? [item.prefix] : []);
+    const suffixes = item.suffixes || (item.suffix ? [item.suffix] : []);
+
+    const prefixGroups = {};
+    const suffixGroups = {};
+
+    prefixes.forEach(prefix => {
+      if (!prefixGroups[prefix.type]) prefixGroups[prefix.type] = 0;
+      prefixGroups[prefix.type] += prefix.value;
+    });
+
+    suffixes.forEach(suffix => {
+      if (!suffixGroups[suffix.type]) suffixGroups[suffix.type] = 0;
+      suffixGroups[suffix.type] += suffix.value;
+    });
+
+    // Find stacked types
+    const stackedTypes = new Set();
+    Object.keys(prefixGroups).forEach(type => {
+      if (suffixGroups[type]) stackedTypes.add(type);
+    });
+
+    const allTypes = new Set([...Object.keys(prefixGroups), ...Object.keys(suffixGroups)]);
+
+    if (allTypes.size > 0) {
+      html += `<div style="margin-top: 8px;"></div>`;
+      allTypes.forEach(type => {
+        const prefixValue = prefixGroups[type] || 0;
+        const suffixValue = suffixGroups[type] || 0;
+        const totalValue = prefixValue + suffixValue;
+
+        // Determine color
+        let color;
+        if (stackedTypes.has(type)) {
+          color = '#ffffff'; // White for stacked
+        } else if (prefixValue > 0) {
+          color = '#88ff88'; // Green for prefix-only
+        } else {
+          color = '#ffaa44'; // Orange for suffix-only
+        }
+
+        const propName = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+        if (type.includes('increased')) {
+          html += `<div style="color: ${color};">${propName} by ${totalValue}%</div>`;
+        } else {
+          html += `<div style="color: ${color};">+${totalValue} to ${propName}</div>`;
+        }
+      });
+    }
+
+    return html;
   }
 
   renderItem(item, isEquipment = false) {

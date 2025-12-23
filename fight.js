@@ -169,13 +169,20 @@ class Fight {
     // Generate loot based on enemy's location (not player's current location)
     const enemyLocation = this.currentEnemyMapType || 'wilderness';
     const enemyLevel = enemy.level || 1;
-    const drop = generateEnemyDrop(enemyLocation, enemyLevel);
+    const enemyDrops = enemy.drops || { goldMin: 6, goldMax: 11 }; // Default fallback
+    const drop = generateEnemyDrop(enemyLocation, enemyLevel, enemyDrops);
 
     // Apply drops immediately, not in setTimeout
     if (drop.type === 'gold') {
       this.game.inventory.addGold(drop.amount);
     } else if (drop.type === 'item') {
-      this.game.inventory.addItem(drop.item);
+      // Check loot filter before picking up
+      const itemTier = drop.item.tier || 'NORMAL';
+      if (this.game.inventory.lootFilter[itemTier]) {
+        this.game.inventory.addItem(drop.item);
+      } else {
+        this.game.setMessage(`${drop.item.name} (${itemTier}) not picked up (filtered)`);
+      }
     }
   }
 

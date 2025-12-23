@@ -741,15 +741,10 @@ io.on('connection', (socket) => {
     const gameName = socket.gameName;
     let partyMembers = [{ name: socket.playerName, level: inventory.level || 1, socketId: socket.id }];
 
-    console.log(`[Party Exp Debug]gameName: ${gameName}, has parties: ${gameParties.has(gameName)} `);
-
     if (gameName && gameParties.has(gameName)) {
       const parties = gameParties.get(gameName);
-      console.log(`[Party Exp Debug] Found ${parties.size} parties in game`);
       for (const [partyId, party] of parties.entries()) {
-        console.log(`[Party Exp Debug] Checking party ${partyId}, members: ${party.members.join(', ')}, looking for: ${socket.playerName} `);
         if (party.members.includes(socket.playerName)) {
-          console.log(`[Party Exp Debug] Player ${socket.playerName} is in party!`);
           // Get all party members with their levels and socket IDs
           const players = await pool.query(
             'SELECT socket_id, name, level FROM players WHERE game_id = $1 AND name = ANY($2)',
@@ -768,7 +763,6 @@ io.on('connection', (socket) => {
               };
             })
             .filter(m => m.location === currentLocation); // Only party members in same zone
-          console.log(`[Party Exp Debug] Found ${partyMembers.length} party members in same location: `, partyMembers.map(m => m.name));
           break;
         }
       }
@@ -811,9 +805,6 @@ io.on('connection', (socket) => {
       if (member.name === socket.playerName) {
         if (!memberInventory.monstersKilled) memberInventory.monstersKilled = 0;
         memberInventory.monstersKilled += 1;
-        console.log(`[Kill Counter] ${member.name} killed a monster.Total kills: ${memberInventory.monstersKilled} `);
-      } else {
-        console.log(`[Kill Counter] ${member.name} is party member, not killer(killer is ${socket.playerName})`);
       }
 
       const oldLevel = memberInventory.level;
@@ -1078,8 +1069,6 @@ io.on('connection', (socket) => {
   socket.on('map_event', (data) => {
     const { gameId, type, x, y, location, monsterData } = data;
 
-    console.log(`[Map Event] ${type} at(${x}, ${y}) in ${location} by ${socket.playerName} `);
-
     // Broadcast to all other players in the same game and location
     io.to(`game_${gameId} `).emit('map_event_broadcast', {
       type,
@@ -1091,8 +1080,6 @@ io.on('connection', (socket) => {
 
     // If it's an enemy kill with monster data, trigger award_experience for party sharing
     if (type === 'enemy_killed' && monsterData) {
-      console.log(`[Party Exp] Monster killed: ${monsterData.name} (level ${monsterData.level}) for ${monsterData.experience} exp`);
-
       // Directly invoke the award_experience handler
       const handler = socket._events['award_experience'];
       if (handler) {
