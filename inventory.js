@@ -21,6 +21,26 @@ class Inventory {
     this.selectedItem = null;
     this.selectedSlot = null;
 
+    // Loot filter settings - which tiers to auto-pickup
+    this.lootFilter = {
+      NORMAL: true,
+      MAGICAL: true,
+      RARE: true,
+      COMPOUND: true,
+      UNIQUE: true,
+      LEGENDARY: true
+    };
+
+    // Load loot filter from localStorage if available
+    try {
+      const savedFilter = localStorage.getItem('lootFilter');
+      if (savedFilter) {
+        this.lootFilter = JSON.parse(savedFilter);
+      }
+    } catch (e) {
+      console.error('Failed to load loot filter:', e);
+    }
+
     this.setupEventListeners();
     this.createInventoryUI();
     this.setupSocketListeners();
@@ -61,7 +81,29 @@ class Inventory {
       if (e.key === 'Escape' && this.isOpen) {
         this.close();
       }
+      // Shift + Del to delete all items
+      if ((e.key === 'Delete' || e.key === 'Del') && e.shiftKey && this.isOpen) {
+        this.deleteAllItems();
+      }
     });
+
+    // Create custom tooltip element
+    this.tooltip = document.createElement('div');
+    this.tooltip.id = 'customTooltip';
+    this.tooltip.style.cssText = `
+      position: fixed;
+      display: none;
+      background-color: rgba(10, 10, 10, 0.95);
+      border: 2px solid #666;
+      border-radius: 4px;
+      padding: 10px;
+      z-index: 10000;
+      pointer-events: none;
+      max-width: 300px;
+      font-size: 12px;
+      line-height: 1.4;
+    `;
+    document.body.appendChild(this.tooltip);
   }
 
   createInventoryUI() {
@@ -111,6 +153,15 @@ class Inventory {
                 <div class="equipment-item" style="background-color: #0a0a0a; border: 2px solid #333; border-radius: 4px; padding: 15px; min-height: 60px;"></div>
               </div>
             </div>
+
+            <!-- Loot Filter Panel -->
+            <h2 style="color: #888; font-size: 18px; margin-bottom: 15px; margin-top: 20px;">Loot Filter</h2>
+            <div style="background-color: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 20px;">
+              <div style="color: #888; font-size: 12px; margin-bottom: 10px;">Auto-pickup:</div>
+              <div id="lootFilterContainer" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Checkboxes generated dynamically -->
+              </div>
+            </div>
           </div>
 
           <!-- Inventory Grid -->
@@ -125,7 +176,7 @@ class Inventory {
         <div style="text-align: center; margin-top: 30px; color: #888; font-size: 14px;">
           <div>Press I or ESC to close</div>
           <div style="margin-top: 10px; font-size: 12px;">
-            Click equipped items to unequip • Click inventory items to equip • Shift + Right-click to delete
+            Click equipped items to unequip • Click inventory items to equip • Shift + Right-click to delete • Shift + Del to delete all
           </div>
         </div>
       </div>
@@ -135,6 +186,7 @@ class Inventory {
     this.inventoryUI = inventoryDiv;
 
     this.generateInventorySlots();
+    this.generateLootFilterUI();
   }
 
   generateInventorySlots() {
@@ -170,6 +222,60 @@ class Inventory {
 
       grid.appendChild(slot);
     }
+  }
+
+  generateLootFilterUI() {
+    const container = document.getElementById('lootFilterContainer');
+    if (!container) return;
+
+    const tierColors = {
+      NORMAL: '#888888',
+      MAGICAL: '#4a9eff',
+      RARE: '#ffff4a',
+      COMPOUND: '#ff8800',
+      UNIQUE: '#ff4aff',
+      LEGENDARY: '#ff4a4a'
+    };
+
+    const tiers = ['NORMAL', 'MAGICAL', 'RARE', 'COMPOUND', 'UNIQUE', 'LEGENDARY'];
+
+    tiers.forEach(tier => {
+      const label = document.createElement('label');
+      label.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      `;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = this.lootFilter[tier];
+      checkbox.style.cssText = `
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+      `;
+
+      checkbox.addEventListener('change', (e) => {
+        this.lootFilter[tier] = e.target.checked;
+        localStorage.setItem('lootFilter', JSON.stringify(this.lootFilter));
+        this.game.setMessage(`${tier} items ${e.target.checked ? 'enabled' : 'disabled'} for auto-pickup`);
+      });
+
+      const text = document.createElement('span');
+      text.textContent = tier.charAt(0) + tier.slice(1).toLowerCase();
+      text.style.cssText = `
+        color: ${tierColors[tier]};
+        font-size: 14px;
+        font-weight: bold;
+      `;
+
+      label.appendChild(checkbox);
+      label.appendChild(text);
+      container.appendChild(label);
+    });
   }
 
   toggle() {
@@ -227,6 +333,19 @@ class Inventory {
     }
   }
 
+  deleteAllItems() {
+    const itemCount = this.slots.filter(item => item !== null).length;
+    if (itemCount === 0) {
+      this.game.setMessage('No items to delete!');
+      return;
+    }
+
+    if (confirm(`Delete ALL ${itemCount} items? This cannot be undone!`)) {
+      // Emit to server to delete all items
+      this.socket.emit('inventory_delete_all_items');
+    }
+  }
+
   render() {
     // Update gold display
     document.getElementById('goldAmount').textContent = this.gold;
@@ -242,7 +361,21 @@ class Inventory {
     slots.forEach((slot, index) => {
       const item = this.slots[index];
       if (item) {
-        slot.innerHTML = this.renderItem(item);
+        // Compact view: just name and tier
+        const tierColor = item.tierData ? item.tierData.color : '#888888';
+        slot.innerHTML = `
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 5px;">
+            <div style="font-size: 11px; font-weight: bold; color: ${tierColor}; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%;">
+              ${item.name}
+            </div>
+            <div style="font-size: 9px; color: ${tierColor}; margin-top: 2px;">
+              ${item.tierData ? item.tierData.name : 'Normal'}
+            </div>
+          </div>
+        `;
+
+        // Full details in tooltip
+        slot.title = this.renderItemTooltip(item);
         slot.style.cursor = 'pointer';
 
         // Left click to equip
@@ -262,6 +395,7 @@ class Inventory {
         };
       } else {
         slot.innerHTML = '';
+        slot.title = '';
         slot.style.cursor = 'default';
         slot.onclick = null;
         slot.oncontextmenu = null;
@@ -288,35 +422,100 @@ class Inventory {
     }
   }
 
+  renderItemTooltip(item) {
+    if (!item || !item.tierData) return '';
+
+    let tooltip = `${item.name} (${item.tierData.name})`;
+
+    // Add stats
+    if (item.damage) tooltip += `\nDMG: ${item.damage}`;
+    if (item.defense) tooltip += `\nDEF: ${item.defense}`;
+    if (item.speed) tooltip += `\nSPD: ${item.speed}`;
+    if (item.blockChance) tooltip += `\nBlock: ${(item.blockChance * 100).toFixed(0)}%`;
+
+    // Add affixes
+    const prefixes = item.prefixes || (item.prefix ? [item.prefix] : []);
+    const suffixes = item.suffixes || (item.suffix ? [item.suffix] : []);
+
+    const prefixGroups = {};
+    const suffixGroups = {};
+
+    prefixes.forEach(prefix => {
+      if (!prefixGroups[prefix.type]) prefixGroups[prefix.type] = 0;
+      prefixGroups[prefix.type] += prefix.value;
+    });
+
+    suffixes.forEach(suffix => {
+      if (!suffixGroups[suffix.type]) suffixGroups[suffix.type] = 0;
+      suffixGroups[suffix.type] += suffix.value;
+    });
+
+    const allTypes = new Set([...Object.keys(prefixGroups), ...Object.keys(suffixGroups)]);
+
+    allTypes.forEach(type => {
+      const prefixValue = prefixGroups[type] || 0;
+      const suffixValue = suffixGroups[type] || 0;
+      const totalValue = prefixValue + suffixValue;
+
+      const propName = type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, ' ');
+      if (type.includes('increased')) {
+        tooltip += `\n${propName} by ${totalValue}%`;
+      } else {
+        tooltip += `\n+${totalValue} to ${propName}`;
+      }
+    });
+
+    return tooltip;
+  }
+
   renderItem(item, isEquipment = false) {
+    if (!item || !item.tierData) return '';
+
     const tierColor = item.tierData.color;
     const stats = [];
 
     // Calculate increased_weapon_damage percentage from all equipped items
     let weaponDamageBonus = 0;
-    if (item.type === 'weapon' && this.equipped) {
-      // Check all equipment slots (including weapon) for increased_weapon_damage
-      ['weapon', 'armor', 'helm', 'shield'].forEach(slot => {
-        const equippedItem = this.equipped[slot];
-        if (equippedItem) {
-          if (equippedItem.prefix && equippedItem.prefix.type === 'increased_weapon_damage') {
-            weaponDamageBonus += equippedItem.prefix.value;
+
+    if (item.type === 'weapon') {
+      // Check all equipped items for increased_weapon_damage
+      Object.values(this.equipped).forEach(equippedItem => {
+        if (!equippedItem) return;
+
+        // Handle both old format (prefix/suffix) and new format (prefixes/suffixes arrays)
+        const prefixes = equippedItem.prefixes || (equippedItem.prefix ? [equippedItem.prefix] : []);
+        const suffixes = equippedItem.suffixes || (equippedItem.suffix ? [equippedItem.suffix] : []);
+
+        prefixes.forEach(prefix => {
+          if (prefix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += prefix.value;
           }
-          if (equippedItem.suffix && equippedItem.suffix.type === 'increased_weapon_damage') {
-            weaponDamageBonus += equippedItem.suffix.value;
+        });
+
+        suffixes.forEach(suffix => {
+          if (suffix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += suffix.value;
           }
-        }
+        });
       });
 
       // If this weapon is NOT currently equipped, also check its own affixes
       // since they would apply if it were equipped
       if (this.equipped.weapon?.uniqueId !== item.uniqueId) {
-        if (item.prefix && item.prefix.type === 'increased_weapon_damage') {
-          weaponDamageBonus += item.prefix.value;
-        }
-        if (item.suffix && item.suffix.type === 'increased_weapon_damage') {
-          weaponDamageBonus += item.suffix.value;
-        }
+        const prefixes = item.prefixes || (item.prefix ? [item.prefix] : []);
+        const suffixes = item.suffixes || (item.suffix ? [item.suffix] : []);
+
+        prefixes.forEach(prefix => {
+          if (prefix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += prefix.value;
+          }
+        });
+
+        suffixes.forEach(suffix => {
+          if (suffix.type === 'increased_weapon_damage') {
+            weaponDamageBonus += suffix.value;
+          }
+        });
       }
     }
 
@@ -347,26 +546,63 @@ class Inventory {
       }
     };
 
-    // Build affix display
+    // Build affix display - handle both arrays and legacy single objects
     let affixHTML = '';
-    if (item.prefix) {
-      const formatter = AFFIX_DISPLAY_FORMATS[item.prefix.type] || AFFIX_DISPLAY_FORMATS['default'];
+    const prefixes = item.prefixes || (item.prefix ? [item.prefix] : []);
+    const suffixes = item.suffixes || (item.suffix ? [item.suffix] : []);
+
+    // Group prefixes and suffixes separately first
+    const prefixGroups = {};
+    const suffixGroups = {};
+
+    prefixes.forEach(prefix => {
+      if (!prefixGroups[prefix.type]) {
+        prefixGroups[prefix.type] = 0;
+      }
+      prefixGroups[prefix.type] += prefix.value;
+    });
+
+    suffixes.forEach(suffix => {
+      if (!suffixGroups[suffix.type]) {
+        suffixGroups[suffix.type] = 0;
+      }
+      suffixGroups[suffix.type] += suffix.value;
+    });
+
+    // Find which affixes appear in both (these will be white)
+    const stackedTypes = new Set();
+    Object.keys(prefixGroups).forEach(type => {
+      if (suffixGroups[type]) {
+        stackedTypes.add(type);
+      }
+    });
+
+    // Display all affixes
+    const allTypes = new Set([...Object.keys(prefixGroups), ...Object.keys(suffixGroups)]);
+
+    allTypes.forEach(type => {
+      const prefixValue = prefixGroups[type] || 0;
+      const suffixValue = suffixGroups[type] || 0;
+      const totalValue = prefixValue + suffixValue;
+
+      // Determine color: white if stacked, green if prefix-only, orange if suffix-only
+      let color;
+      if (stackedTypes.has(type)) {
+        color = '#ffffff'; // White for stacked
+      } else if (prefixValue > 0) {
+        color = '#88ff88'; // Green for prefix-only
+      } else {
+        color = '#ffaa44'; // Orange for suffix-only
+      }
+
+      const formatter = AFFIX_DISPLAY_FORMATS[type] || AFFIX_DISPLAY_FORMATS['default'];
       const displayText = typeof formatter === 'function'
-        ? formatter(item.prefix.value, item.prefix.type)
+        ? formatter(totalValue, type)
         : formatter;
-      affixHTML += `<div style="color: #88ff88; font-size: ${isEquipment ? '11px' : '10px'}; margin-top: 3px;">
+      affixHTML += `<div style="color: ${color}; font-size: ${isEquipment ? '11px' : '10px'}; margin-top: 3px;">
         ${displayText}
       </div>`;
-    }
-    if (item.suffix) {
-      const formatter = AFFIX_DISPLAY_FORMATS[item.suffix.type] || AFFIX_DISPLAY_FORMATS['default'];
-      const displayText = typeof formatter === 'function'
-        ? formatter(item.suffix.value, item.suffix.type)
-        : formatter;
-      affixHTML += `<div style="color: #ffaa44; font-size: ${isEquipment ? '11px' : '10px'}; margin-top: 3px;">
-        ${displayText}
-      </div>`;
-    }
+    });
 
     return `
     <div style="width: 100%; text-align: ${isEquipment ? 'left' : 'center'}; display: flex; ${isEquipment ? 'flex-direction: row; align-items: center; gap: 10px;' : 'flex-direction: column; align-items: center;'}">

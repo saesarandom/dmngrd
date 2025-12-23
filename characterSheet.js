@@ -230,7 +230,11 @@ class CharacterSheet {
 
     document.getElementById('charName').textContent = character.name || '-';
     document.getElementById('charLevel').textContent = this.level;
-    document.getElementById('charExperience').textContent = this.experience;
+
+    // Display experience as current/required
+    const requiredExp = getExperienceForNextLevel(this.level);
+    document.getElementById('charExperience').textContent = `${this.experience}/${requiredExp}`;
+
     document.getElementById('charClass').textContent = character.class || '-';
     document.getElementById('charRace').textContent = character.race || '-';
     document.getElementById('charMonstersKilled').textContent = this.monstersKilled;
@@ -245,14 +249,19 @@ class CharacterSheet {
       ['weapon', 'armor', 'helm', 'shield'].forEach(slot => {
         const item = equipped[slot];
         if (item) {
-          // Add prefix bonuses
-          if (item.prefix) {
-            itemBonuses[item.prefix.type] = (itemBonuses[item.prefix.type] || 0) + item.prefix.value;
-          }
-          // Add suffix bonuses
-          if (item.suffix) {
-            itemBonuses[item.suffix.type] = (itemBonuses[item.suffix.type] || 0) + item.suffix.value;
-          }
+          // Handle both old format (prefix/suffix) and new format (prefixes/suffixes arrays)
+          const prefixes = item.prefixes || (item.prefix ? [item.prefix] : []);
+          const suffixes = item.suffixes || (item.suffix ? [item.suffix] : []);
+
+          // Add all prefix bonuses
+          prefixes.forEach(prefix => {
+            itemBonuses[prefix.type] = (itemBonuses[prefix.type] || 0) + prefix.value;
+          });
+
+          // Add all suffix bonuses
+          suffixes.forEach(suffix => {
+            itemBonuses[suffix.type] = (itemBonuses[suffix.type] || 0) + suffix.value;
+          });
         }
       });
     }

@@ -672,6 +672,36 @@ io.on('connection', (socket) => {
     console.log(`Player ${socket.playerName} deleted ${item.name} `);
   });
 
+  socket.on('inventory_delete_all_items', () => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    // Count items before deletion for logging
+    const itemCount = inventory.slots.filter(slot => slot !== null).length;
+
+    if (itemCount === 0) return;
+
+    // Delete all items
+    inventory.slots = Array(30).fill(null);
+
+    // Broadcast updated inventory
+    socket.emit('inventory_updated', {
+      slots: inventory.slots,
+      equipped: inventory.equipped,
+      gold: inventory.gold,
+      experience: inventory.experience || 0,
+      level: inventory.level || 1,
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths || 0
+    });
+
+    // Send confirmation message
+    socket.emit('items_deleted', { count: itemCount });
+
+    console.log(`Player ${socket.playerName} deleted all ${itemCount} items`);
+  });
+
+
   socket.on('inventory_add_gold', (data) => {
     const inventory = playerInventories.get(socket.id);
     if (!inventory) return;

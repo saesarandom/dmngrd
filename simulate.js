@@ -5,7 +5,7 @@ class Simulator {
     this.isSimulating = false;
     this.simulationInterval = null;
     this.strategy = 'hunt'; // 'hunt', 'explore', 'avoid'
-    
+
     this.setupEventListeners();
   }
 
@@ -29,7 +29,7 @@ class Simulator {
   start() {
     this.isSimulating = true;
     this.game.setMessage('Simulation started - Bot is now playing');
-    
+
     this.simulationInterval = setInterval(() => {
       this.makeMove();
     }, this.movement.moveDelay);
@@ -46,7 +46,7 @@ class Simulator {
 
   makeMove() {
     const player = this.game.player;
-    
+
     // In town - interact with NPCs or exit
     if (this.game.inTown && this.game.currentTown) {
       this.handleTownBehavior();
@@ -55,24 +55,30 @@ class Simulator {
 
     // In wilderness - hunt enemies
     const nearestEnemy = this.findNearestEnemy();
-    
+
     if (nearestEnemy) {
       this.moveTowards(nearestEnemy.x, nearestEnemy.y);
     } else {
-      // No enemies, explore randomly
-      this.exploreRandomly();
+      // No enemies - check for exit to next level
+      if (this.game.exits && this.game.exits.length > 0) {
+        const exit = this.game.exits[0];
+        this.moveTowards(exit.x, exit.y);
+      } else {
+        // No exit available (e.g., final zone), explore randomly
+        this.exploreRandomly();
+      }
     }
   }
 
   handleTownBehavior() {
     const player = this.game.player;
     const town = this.game.currentTown;
-    
+
     // Check if near NPC
-    const nearbyNPC = town.npcs.find(npc => 
+    const nearbyNPC = town.npcs.find(npc =>
       Math.abs(npc.x - player.x) <= 1 && Math.abs(npc.y - player.y) <= 1
     );
-    
+
     if (nearbyNPC) {
       // Interact with NPC
       this.simulateKeyPress('e');
@@ -85,7 +91,7 @@ class Simulator {
       // We're at exit, leave town
       return;
     }
-    
+
     this.moveTowards(exit.x, exit.y);
   }
 
@@ -153,9 +159,9 @@ class Simulator {
   findPath(startX, startY, endX, endY) {
     // A* implementation for future complex pathfinding
     // This is a placeholder for more advanced AI
-    const openSet = [{x: startX, y: startY, g: 0, h: this.getDistance(startX, startY, endX, endY)}];
+    const openSet = [{ x: startX, y: startY, g: 0, h: this.getDistance(startX, startY, endX, endY) }];
     const closedSet = new Set();
-    
+
     // TODO: Implement full A* pathfinding
     // For now, use simple movement towards target
     return null;

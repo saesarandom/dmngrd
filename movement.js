@@ -1,7 +1,7 @@
 class Movement {
   constructor(game) {
     this.game = game;
-    this.moveDelay = 500;
+    this.moveDelay = 50;
     this.lastMoveTime = 0;
     this.keysPressed = {};
 

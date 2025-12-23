@@ -13,6 +13,9 @@ class Fight {
 
     this.currentEnemy = enemy.monsterData || getRandomMonster(enemy.mapType || this.game.currentMapType);
 
+    // Store enemy's location/mapType for loot generation
+    this.currentEnemyMapType = enemy.mapType || this.game.currentMapType || 'wilderness';
+
     // Store enemy position for later
     this.currentEnemyPos = { x: enemyX, y: enemyY };
 
@@ -39,12 +42,21 @@ class Fight {
       ['weapon', 'armor', 'helm', 'shield'].forEach(slot => {
         const equippedItem = inventory.equipped[slot];
         if (equippedItem) {
-          if (equippedItem.prefix && equippedItem.prefix.type === 'increased_weapon_damage') {
-            weaponDamageBonus += equippedItem.prefix.value;
-          }
-          if (equippedItem.suffix && equippedItem.suffix.type === 'increased_weapon_damage') {
-            weaponDamageBonus += equippedItem.suffix.value;
-          }
+          // Handle both old format (prefix/suffix) and new format (prefixes/suffixes arrays)
+          const prefixes = equippedItem.prefixes || (equippedItem.prefix ? [equippedItem.prefix] : []);
+          const suffixes = equippedItem.suffixes || (equippedItem.suffix ? [equippedItem.suffix] : []);
+
+          prefixes.forEach(prefix => {
+            if (prefix.type === 'increased_weapon_damage') {
+              weaponDamageBonus += prefix.value;
+            }
+          });
+
+          suffixes.forEach(suffix => {
+            if (suffix.type === 'increased_weapon_damage') {
+              weaponDamageBonus += suffix.value;
+            }
+          });
         }
       });
     }
@@ -154,10 +166,10 @@ class Fight {
       });
     }
 
-    // Generate loot based on current location and enemy level
-    const currentLocation = this.game.currentLocation || 'wilderness';
+    // Generate loot based on enemy's location (not player's current location)
+    const enemyLocation = this.currentEnemyMapType || 'wilderness';
     const enemyLevel = enemy.level || 1;
-    const drop = generateEnemyDrop(currentLocation, enemyLevel);
+    const drop = generateEnemyDrop(enemyLocation, enemyLevel);
 
     // Apply drops immediately, not in setTimeout
     if (drop.type === 'gold') {
