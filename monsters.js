@@ -243,6 +243,61 @@ const MinotaurPrototype = {
     goldMax: 95
   }
 };
+
+const GiantBatPrototype = {
+  id: 'giant_bat',
+  name: 'Giant Bat',
+  level: 18,
+  damage: 14,
+  defense: 14,
+  block: 14,
+  hp: 109,
+  color: '#ff4a4a',
+  experience: 119,
+  resistances: {
+    physical: 0,
+    fire: 0,
+    cold: 0,
+    lightning: 0,
+    poison: 0,
+    magic: 0,
+    curse: 0,
+    dot: 0,
+  },
+  drops: {
+    goldMin: 100,
+    goldMax: 122
+  }
+};
+
+const ArchbishopMalericPrototype = {
+  id: 'archbishop_maleric',
+  name: 'Archbishop Maleric',
+  level: 20,
+  damage: 36,
+  defense: 36,
+  block: 18,
+  hp: 250,
+  color: '#ff0000',
+  experience: 340,
+  boss: 1,
+  resistances: {
+    physical: 0.15,
+    fire: 0.10,
+    cold: 0.1,
+    lightning: 0.1,
+    poison: 0.10,
+    magic: 0.25,
+    curse: 0.30,
+    dot: 0.15,
+  },
+  drops: {
+    goldMin: 450,
+    goldMax: 650
+  }
+};
+
+
 function createMonster(prototype) {
   return new Monster(JSON.parse(JSON.stringify(prototype)));
 }
@@ -254,7 +309,8 @@ const ZONE_LEVELS = {
   'deep_forest': 5,
   'mountain_range': 8,
   'caverns': 12,
-  'inner_prison': 16
+  'inner_prison': 16,
+  'archbishops_cellar': 20
 };
 
 function getZoneLevel(mapType) {
@@ -273,7 +329,10 @@ function getRandomMonster(mapType = 'wilderness') {
   } else if (mapType === 'outer_plains') {
     monsters = [ArmedVillagerPrototype];
   } else if (mapType === 'inner_prison') {
-    monsters = [MinotaurPrototype];
+    monsters = [MinotaurPrototype, GiantBatPrototype];
+  } else if (mapType === 'archbishops_cellar') {
+    // Boss encounter - only Archbishop Maleric spawns here
+    monsters = [ArchbishopMalericPrototype];
   } else {
     // wilderness or default
     monsters = [RottenPrototype, FluffySlimePrototype];

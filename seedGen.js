@@ -7,10 +7,18 @@ function initializeGameWithSeed(seed, gridSize = 30, mapType = 'wilderness') {
   const shrines = [];
 
   // Generate enemies
-  for (let y = 0; y < gridSize; y++) {
-    for (let x = 0; x < gridSize; x++) {
-      if (rng() < 1 / 128) {
-        enemies.push({ x, y, mapType });
+  if (mapType === 'archbishops_cellar') {
+    // Special boss encounter - spawn Archbishop Maleric once in the center
+    const centerX = Math.floor(gridSize / 2);
+    const centerY = Math.floor(gridSize / 2);
+    enemies.push({ x: centerX, y: centerY, mapType, isBoss: true });
+  } else {
+    // Normal enemy generation for other zones
+    for (let y = 0; y < gridSize; y++) {
+      for (let x = 0; x < gridSize; x++) {
+        if (rng() < 1 / 128) {
+          enemies.push({ x, y, mapType });
+        }
       }
     }
   }
@@ -36,7 +44,7 @@ function initializeGameWithSeed(seed, gridSize = 30, mapType = 'wilderness') {
   // Generate shrines
   emptyCells.forEach(cell => {
     const hasTrap = traps.some(trap => trap.x === cell.x && trap.y === cell.y);
-    if (!hasTrap && rng() < 1 / 512) {
+    if (!hasTrap && rng() < 1 / 1024) {
       shrines.push({ x: cell.x, y: cell.y });
     }
   });
@@ -51,7 +59,7 @@ function initializeGameWithSeed(seed, gridSize = 30, mapType = 'wilderness') {
 
   // Generate exit portal on edge for wilderness maps
   const exits = [];
-  if (mapType === 'wilderness' || mapType === 'outer_plains' || mapType === 'deep_forest' || mapType === 'mountain_range' || mapType === 'caverns') {
+  if (mapType === 'wilderness' || mapType === 'outer_plains' || mapType === 'deep_forest' || mapType === 'mountain_range' || mapType === 'caverns' || mapType === 'inner_prison') {
     const rng2 = new Math.seedrandom(seed + '_exit_' + mapType);
     const edge = Math.floor(rng2() * 4);
     let exitX, exitY;
@@ -96,6 +104,8 @@ function getNextMapType(currentMap) {
     return { gridSize: 46, mapType: 'caverns', displayName: 'Caverns' };
   } else if (currentMap === 'caverns') {
     return { gridSize: 50, mapType: 'inner_prison', displayName: 'Inner Prison' };
+  } else if (currentMap === 'inner_prison') {
+    return { gridSize: 54, mapType: 'archbishops_cellar', displayName: "Archbishop's Cellar" };
   }
   return { gridSize: 30, mapType: 'wilderness', displayName: 'Wilderness' };
 }

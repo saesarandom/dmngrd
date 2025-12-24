@@ -128,6 +128,7 @@ class Inventory {
           <h1 style="color: #4aff4a; font-size: 32px;">Inventory</h1>
           <div style="color: #ffff4a; font-size: 20px;">
             <span style="color: #888;">Gold:</span> <span id="goldAmount">0</span> Crownel
+            <span style="margin-left: 20px; color: #888;">Power:</span> <span id="powerDisplay" style="color: #4aff4a; font-weight: bold;">0</span>
           </div>
         </div>
 
@@ -346,6 +347,98 @@ class Inventory {
     }
   }
 
+  updatePowerDisplay() {
+    const powerElement = document.getElementById('powerDisplay');
+    if (!powerElement) return;
+
+    // Calculate power using same logic as fight.js
+    let damage = 0;
+    let defense = 0;
+    let blockChance = 0;
+
+    // Calculate weapon damage with bonuses
+    let weaponDamageBonus = 0;
+    Object.values(this.equipped).forEach(item => {
+      if (!item) return;
+      const prefixes = item.prefixes || (item.prefix ? [item.prefix] : []);
+      const suffixes = item.suffixes || (item.suffix ? [item.suffix] : []);
+
+      prefixes.forEach(prefix => {
+        if (prefix.type === 'increased_weapon_damage') {
+          weaponDamageBonus += prefix.value;
+        }
+      });
+
+      suffixes.forEach(suffix => {
+        if (suffix.type === 'increased_weapon_damage') {
+          weaponDamageBonus += suffix.value;
+        }
+      });
+    });
+
+    if (this.equipped.weapon) {
+      const baseDamage = this.equipped.weapon.damage || 0;
+      const modifiedDamage = weaponDamageBonus > 0
+        ? baseDamage * (1 + weaponDamageBonus / 100)
+        : baseDamage;
+      damage += modifiedDamage;
+    }
+
+    if (this.equipped.armor) {
+      defense += this.equipped.armor.defense || 0;
+    }
+
+    if (this.equipped.shield) {
+      defense += this.equipped.shield.defense || 0;
+      blockChance += (this.equipped.shield.blockChance || 0) * 100;
+    }
+
+    if (this.equipped.helm) {
+      defense += this.equipped.helm.defense || 0;
+    }
+
+    // Check for set bonuses
+    const equippedSetPieces = {};
+    Object.values(this.equipped).forEach(item => {
+      if (item && item.setId) {
+        if (!equippedSetPieces[item.setId]) {
+          equippedSetPieces[item.setId] = [];
+        }
+        equippedSetPieces[item.setId].push(item.id);
+      }
+    });
+
+    // Apply set bonuses
+    if (typeof SET_BONUSES !== 'undefined') {
+      Object.keys(equippedSetPieces).forEach(setId => {
+        if (SET_BONUSES[setId]) {
+          const setBonusConfig = SET_BONUSES[setId];
+          const setPieceCount = equippedSetPieces[setId].length;
+
+          Object.keys(setBonusConfig.bonuses).forEach(requiredPieces => {
+            if (setPieceCount >= parseInt(requiredPieces)) {
+              const bonuses = setBonusConfig.bonuses[requiredPieces];
+
+              if (bonuses.increased_weapon_damage && this.equipped.weapon) {
+                const avgIncrease = (bonuses.increased_weapon_damage.min + bonuses.increased_weapon_damage.max) / 2;
+                damage *= (1 + avgIncrease / 100);
+              }
+
+              if (bonuses.weapon_damage_bonus) {
+                damage += bonuses.weapon_damage_bonus;
+              }
+            }
+          });
+        }
+      });
+    }
+
+    const blockMultiplier = blockChance > 0 ? 1 / (1 - blockChance / 100) : 1;
+    const power = Math.floor((defense * damage) * blockMultiplier);
+
+    powerElement.textContent = power.toLocaleString();
+  }
+
   render() {
     // Update gold display
     document.getElementById('goldAmount').textContent = this.gold;
@@ -435,12 +528,23 @@ class Inventory {
       slotElement.style.cursor = 'default';
       slotElement.onclick = null;
     }
+
+    // Update power display whenever equipment changes
+    this.updatePowerDisplay();
   }
 
   renderItemTooltip(item) {
     if (!item || !item.tierData) return '';
 
-    let tooltip = `${item.name} (${item.tierData.name})`;
+    // Use compound name for Compound tier items if available
+    let displayName = item.name;
+    if (item.tier === 'COMPOUND' && item.id && BASE_ITEMS[item.id]) {
+      if (BASE_ITEMS[item.id].compoundName) {
+        displayName = BASE_ITEMS[item.id].compoundName;
+      }
+    }
+
+    let tooltip = `${displayName} (${item.tierData.name})`;
 
     // Add stats
     if (item.damage) tooltip += `\nDMG: ${item.damage}`;
@@ -479,6 +583,38 @@ class Inventory {
         tooltip += `\n+${totalValue} to ${propName}`;
       }
     });
+
+    // Check for set bonuses
+    if (item.setId && typeof SET_BONUSES !== 'undefined' && SET_BONUSES[item.setId]) {
+      const setBonusConfig = SET_BONUSES[item.setId];
+      tooltip += `\n\n--- Set: ${setBonusConfig.name} ---`;
+
+      // Check how many pieces of the set are equipped
+      const equippedSetPieces = [];
+      Object.values(this.equipped).forEach(equippedItem => {
+        if (equippedItem && equippedItem.setId === item.setId) {
+          equippedSetPieces.push(equippedItem.id);
+        }
+      });
+
+      const setPieceCount = equippedSetPieces.length;
+      tooltip += `\n(${setPieceCount}/${setBonusConfig.pieces.length})`;
+
+      // Show set bonuses
+      Object.keys(setBonusConfig.bonuses).forEach(requiredPieces => {
+        const bonuses = setBonusConfig.bonuses[requiredPieces];
+        const isActive = setPieceCount >= parseInt(requiredPieces);
+        const color = isActive ? '✓' : '✗';
+
+        tooltip += `\n${color} ${requiredPieces} pieces:`;
+        if (bonuses.increased_weapon_damage) {
+          tooltip += `\n  ${bonuses.increased_weapon_damage.min}-${bonuses.increased_weapon_damage.max}% Increased Weapon Damage`;
+        }
+        if (bonuses.weapon_damage_bonus) {
+          tooltip += `\n  +${bonuses.weapon_damage_bonus} to Maximum Damage`;
+        }
+      });
+    }
 
     return tooltip;
   }
@@ -543,6 +679,39 @@ class Inventory {
           html += `<div style="color: ${color};">${propName} by ${totalValue}%</div>`;
         } else {
           html += `<div style="color: ${color};">+${totalValue} to ${propName}</div>`;
+        }
+      });
+    }
+
+    // Add set bonus display
+    if (item.setId && typeof SET_BONUSES !== 'undefined' && SET_BONUSES[item.setId]) {
+      const setBonusConfig = SET_BONUSES[item.setId];
+
+      // Check how many pieces of the set are equipped
+      const equippedSetPieces = [];
+      Object.values(this.equipped).forEach(equippedItem => {
+        if (equippedItem && equippedItem.setId === item.setId) {
+          equippedSetPieces.push(equippedItem.id);
+        }
+      });
+
+      const setPieceCount = equippedSetPieces.length;
+      const isSetComplete = setPieceCount >= setBonusConfig.pieces.length;
+      const setColor = isSetComplete ? '#4aff4a' : '#888';
+
+      html += `<div style="color: ${setColor}; margin-top: 8px; font-size: 11px;">--- ${setBonusConfig.name} (${setPieceCount}/${setBonusConfig.pieces.length}) ---</div>`;
+
+      // Show set bonuses
+      Object.keys(setBonusConfig.bonuses).forEach(requiredPieces => {
+        const bonuses = setBonusConfig.bonuses[requiredPieces];
+        const isActive = setPieceCount >= parseInt(requiredPieces);
+        const bonusColor = isActive ? '#4aff4a' : '#666';
+
+        if (bonuses.increased_weapon_damage) {
+          html += `<div style="color: ${bonusColor}; font-size: 10px;">${isActive ? '✓' : '✗'} ${bonuses.increased_weapon_damage.min}-${bonuses.increased_weapon_damage.max}% Inc Weapon Dmg</div>`;
+        }
+        if (bonuses.weapon_damage_bonus) {
+          html += `<div style="color: ${bonusColor}; font-size: 10px;">${isActive ? '✓' : '✗'} +${bonuses.weapon_damage_bonus} Max Damage</div>`;
         }
       });
     }

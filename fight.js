@@ -85,6 +85,45 @@ class Fight {
       defense += inventory.equipped.helm.defense || 0;
     }
 
+    // Check for set bonuses
+    const equippedSetPieces = {};
+    Object.values(inventory.equipped).forEach(item => {
+      if (item && item.setId) {
+        if (!equippedSetPieces[item.setId]) {
+          equippedSetPieces[item.setId] = [];
+        }
+        equippedSetPieces[item.setId].push(item.id);
+      }
+    });
+
+    // Apply set bonuses
+    if (typeof SET_BONUSES !== 'undefined') {
+      Object.keys(equippedSetPieces).forEach(setId => {
+        if (SET_BONUSES[setId]) {
+          const setBonusConfig = SET_BONUSES[setId];
+          const setPieceCount = equippedSetPieces[setId].length;
+
+          // Check each tier of bonuses
+          Object.keys(setBonusConfig.bonuses).forEach(requiredPieces => {
+            if (setPieceCount >= parseInt(requiredPieces)) {
+              const bonuses = setBonusConfig.bonuses[requiredPieces];
+
+              // Apply increased weapon damage
+              if (bonuses.increased_weapon_damage && inventory.equipped.weapon) {
+                const increasePercent = Math.random() * (bonuses.increased_weapon_damage.max - bonuses.increased_weapon_damage.min) + bonuses.increased_weapon_damage.min;
+                damage *= (1 + increasePercent / 100);
+              }
+
+              // Apply flat weapon damage bonus
+              if (bonuses.weapon_damage_bonus) {
+                damage += bonuses.weapon_damage_bonus;
+              }
+            }
+          });
+        }
+      });
+    }
+
     // Calculate power: (defense * damage) / 2
     const blockMultiplier = blockChance > 0 ? 1 / (1 - blockChance / 100) : 1;
     const power = (defense * damage) * blockMultiplier;
@@ -166,7 +205,9 @@ class Fight {
     const enemyLocation = this.currentEnemyMapType || 'wilderness';
     const enemyLevel = enemy.level || 1;
     const enemyDrops = enemy.drops || { goldMin: 6, goldMax: 11 }; // Default fallback
-    const drop = generateEnemyDrop(enemyLocation, enemyLevel, enemyDrops);
+    const isBoss = enemy.boss === 1;
+    const monsterName = enemy.name;
+    const drop = generateEnemyDrop(enemyLocation, enemyLevel, enemyDrops, isBoss, monsterName);
 
     // Apply drops immediately, not in setTimeout
     if (drop.type === 'gold') {

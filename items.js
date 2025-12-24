@@ -1,3 +1,24 @@
+const ITEM_TYPES = {
+  WEAPON: 'weapon',
+  ARMOR: 'armor',
+  HELM: 'helm',
+  SHIELD: 'shield',
+};
+
+// Set bonuses configuration
+const SET_BONUSES = {
+  iron_set: {
+    name: 'Iron Storm',
+    pieces: ['iron_ball', 'plate_helmet'],
+    bonuses: {
+      2: { // 2-piece bonus (both items equipped)
+        increased_weapon_damage: { min: 50, max: 70 },
+        weapon_damage_bonus: 3 // Flat +3 to max weapon damage
+      }
+    }
+  }
+};
+
 const ITEM_TIERS = {
   NORMAL: { name: 'Normal', color: '#888888', dropChance: 0 },
   MAGICAL: { name: 'Magical', color: '#4a9eff', dropChance: 1 / 2 },
@@ -67,10 +88,10 @@ const PREFIX_POOL = [
   { type: 'resilience', min: 6, max: 8, levelReq: 15, group: 1, frequency: 3 },
   { type: 'constitution', min: 6, max: 8, levelReq: 15, group: 1, frequency: 3 },
   { type: 'perception', min: 6, max: 8, levelReq: 15, group: 1, frequency: 3 },
-  { type: 'increased_damage', min: 31, max: 40, levelReq: 18, group: 2, frequency: 3 },
+  { type: 'increased_damage', min: 31, max: 40, levelReq: 15, group: 2, frequency: 3 },
   { type: 'increased_speed', min: 6, max: 8, levelReq: 21, group: 2, frequency: 3 },
 
-  // Tier 4 (levelReq 32-46): frequency 4
+  // Tier 4 (levelReq 32-46): frequency 4+
   { type: 'charisma', min: 9, max: 12, levelReq: 32, group: 1, frequency: 4 },
   { type: 'forging', min: 9, max: 12, levelReq: 32, group: 1, frequency: 4 },
   { type: 'strength', min: 9, max: 12, levelReq: 32, group: 1, frequency: 4 },
@@ -210,6 +231,10 @@ const SUFFIX_POOL = [
   { type: 'resilience', min: 6, max: 8, levelReq: 15, group: 100, frequency: 3 },
   { type: 'constitution', min: 6, max: 8, levelReq: 15, group: 100, frequency: 3 },
   { type: 'perception', min: 6, max: 8, levelReq: 15, group: 100, frequency: 3 },
+  { type: 'increased_weapon_damage', min: 16, max: 25, levelReq: 15, group: 105, frequency: 3 },
+  { type: 'increased_weapon_damage', min: 16, max: 25, levelReq: 18, group: 110, frequency: 3 },
+  { type: 'increased_weapon_damage', min: 16, max: 25, levelReq: 21, group: 115, frequency: 3 },
+  { type: 'increased_weapon_damage', min: 16, max: 25, levelReq: 24, group: 120, frequency: 3 },
 
   // Tier 4 (levelReq 32-46): frequency 4
   { type: 'charisma', min: 9, max: 12, levelReq: 32, group: 1, frequency: 4 },
@@ -292,13 +317,6 @@ const SUFFIX_POOL = [
   { type: 'perception', min: 26, max: 30, levelReq: 133, group: 1, frequency: 8 }
 ];
 
-const ITEM_TYPES = {
-  WEAPON: 'weapon',
-  ARMOR: 'armor',
-  HELM: 'helm',
-  SHIELD: 'shield'
-};
-
 const BASE_ITEMS = {
   // Weapons
   blunt_sword: {
@@ -341,6 +359,26 @@ const BASE_ITEMS = {
     speed: 0.9,
     image: 'items/blunt_sword2.png'
   },
+  iron_ball: {
+    id: 'iron_ball',
+    name: 'Iron Ball',
+    compoundName: 'Iron Storm',
+    type: ITEM_TYPES.WEAPON,
+    damage: 14,
+    speed: 1.1,
+    setId: 'iron_set',
+    image: 'items/blunt_sword2.png'
+  },
+  archbishop_staff: {
+    id: 'archbishop_staff',
+    name: 'Archbishop Staff',
+    type: ITEM_TYPES.WEAPON,
+    unique: true,
+    dropChance: 1 / 6,
+    damage: 20,
+    speed: 0.85,
+    image: 'items/blunt_sword2.png'
+  },
 
   // Armor
   rags: {
@@ -354,7 +392,7 @@ const BASE_ITEMS = {
     id: 'plate_mail',
     name: 'Plate Mail',
     type: ITEM_TYPES.ARMOR,
-    defense: 4,
+    defense: 6,
     image: 'items/rags2.png'
   },
   // Helm
@@ -368,8 +406,10 @@ const BASE_ITEMS = {
   plate_helmet: {
     id: 'plate_helmet',
     name: 'Plate Helmet',
+    compoundName: 'Iron Majesty',
     type: ITEM_TYPES.HELM,
-    defense: 4,
+    defense: 5,
+    setId: 'iron_set',
     image: 'items/crude_helm.png'
   },
   // Shield
@@ -537,6 +577,11 @@ function createItem(baseItemId, tier = 'NORMAL', monsterLevel = 1) {
     uniqueId: `${baseItemId}_${Date.now()}_${Math.random()}`
   };
 
+  // Use compound name for Compound tier items
+  if (tier === 'COMPOUND' && baseItem.compoundName) {
+    item.name = baseItem.compoundName;
+  }
+
   // Apply tier bonuses
   if (tier !== 'NORMAL') {
     const multiplier = {
@@ -654,9 +699,33 @@ const LOCATION_LOOT = {
   'deep_forest': ['wooden_shield', 'scepter', 'crude_helm'],
   'mountain_range': ['large_shield', 'short_bow'],
   'caverns': ['plate_mail', 'pike', 'plate_helmet'],
+  'inner_prison': ['plate_helmet']
 };
 
-function generateEnemyDrop(location = 'wilderness', monsterLevel = 1, enemyDrops = null) {
+function generateEnemyDrop(location = 'wilderness', monsterLevel = 1, enemyDrops = null, isBoss = false, monsterName = '') {
+  // Special boss drop logic for Archbishop Maleric
+  if (isBoss && monsterName === 'Archbishop Maleric') {
+    const bossDropRoll = Math.random();
+
+    // 1/6 chance (16.67%) to drop Archbishop Staff
+    if (bossDropRoll < 1 / 6) {
+      return {
+        type: 'item',
+        item: createItem('archbishop_staff', 'UNIQUE', monsterLevel)
+      };
+    }
+
+    // Otherwise, drop gold (boss always drops gold if no unique item)
+    const goldMin = enemyDrops?.goldMin ?? 450;
+    const goldMax = enemyDrops?.goldMax ?? 650;
+    const goldAmount = Math.floor(Math.random() * (goldMax - goldMin + 1)) + goldMin;
+    return {
+      type: 'gold',
+      amount: goldAmount
+    };
+  }
+
+  // Normal enemy drop logic
   const dropType = Math.random();
 
   // 33% chance for gold
@@ -710,6 +779,16 @@ function getStarterGear(className) {
     helm: gear.helm ? createItem(gear.helm, 'NORMAL') : null,
     shield: gear.shield ? createItem(gear.shield, 'NORMAL') : null
   };
+}
+
+// Get display name for item based on tier
+function getItemDisplayName(item) {
+  // If item is Compound tier and has a compoundName, use it
+  if (item.tier === 'COMPOUND' && item.baseItem && BASE_ITEMS[item.baseItem].compoundName) {
+    return BASE_ITEMS[item.baseItem].compoundName;
+  }
+  // Otherwise use the regular name
+  return item.name;
 }
 
 // Export for server-side use

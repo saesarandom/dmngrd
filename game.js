@@ -21,11 +21,44 @@ class Game {
     this.inTown = false;
     this.currentTown = null;
 
+    // Image cache for preloading
+    this.imageCache = {};
+
     this.setMessage('Initializing game...');
+    this.preloadImages();
     this.setupCanvas();
     this.setupEventListeners();
     this.setupMouseTracking();
     this.setupChatHandlers();
+  }
+
+  preloadImages() {
+    // List of all images to preload
+    const imagePaths = [
+      'items/shrine.png',
+      'items/blunt_sword2.png',
+      'items/crude_helm.png',
+      'items/rags2.png',
+      // Add more as needed
+    ];
+
+    imagePaths.forEach(path => {
+      const img = new Image();
+      img.src = path;
+      this.imageCache[path] = img;
+    });
+  }
+
+  getCachedImage(path) {
+    // Return cached image if available, otherwise create new one
+    if (this.imageCache[path]) {
+      return this.imageCache[path];
+    }
+
+    const img = new Image();
+    img.src = path;
+    this.imageCache[path] = img;
+    return img;
   }
 
   setupCanvas() {
@@ -293,8 +326,7 @@ class Game {
 
   drawItemIcon(item, x, y, width, height) {
     if (item.image) {
-      const img = new Image();
-      img.src = item.image;
+      const img = this.getCachedImage(item.image);
 
       if (img.complete) {
         this.ctx.drawImage(img, x, y, width, height);
@@ -318,6 +350,26 @@ class Game {
       case 'helm': return '#ffff4a';
       case 'shield': return '#ff8800';
       default: return '#888888';
+    }
+  }
+
+  drawShrineImage(x, y) {
+    const px = x * this.cellSize;
+    const py = y * this.cellSize;
+
+    const img = this.getCachedImage('items/shrine.png');
+
+    if (img.complete) {
+      this.ctx.drawImage(img, px, py, this.cellSize, this.cellSize);
+    } else {
+      img.onload = () => {
+        this.ctx.drawImage(img, px, py, this.cellSize, this.cellSize);
+      };
+      // Fallback to colored square if image fails to load
+      img.onerror = () => {
+        this.ctx.fillStyle = '#9d4aff';
+        this.ctx.fillRect(px + 2, py + 2, this.cellSize - 4, this.cellSize - 4);
+      };
     }
   }
 
@@ -361,13 +413,9 @@ class Game {
     } else {
       if (this.shrines) {
         this.shrines.forEach(shrine => {
-          this.drawCell(shrine.x, shrine.y, '#9d4aff');
+          this.drawShrineImage(shrine.x, shrine.y);
         });
       }
-
-      this.traps.forEach(trap => {
-        this.drawCell(trap.x, trap.y, '#ff8800');
-      });
 
       this.enemies.forEach(enemy => {
         this.drawCell(enemy.x, enemy.y, '#ff4a4a');

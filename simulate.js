@@ -136,13 +136,14 @@ class Simulator {
       'deep forest': 'Deep Forest',
       'mountain range': 'Mountain Range',
       'caverns': 'Caverns',
-      'inner prison': 'Inner Prison'
+      'inner prison': 'Inner Prison',
+      "archbishop's cellar": "Archbishop's Cellar"
     };
 
     const normalizedZone = zoneMap[zoneName.toLowerCase()];
 
     if (!normalizedZone) {
-      this.game.setMessage(`Unknown zone: ${zoneName}. Available: Wilderness, Outer Plains, Deep Forest, Mountain Range, Caverns, Inner Prison`);
+      this.game.setMessage(`Unknown zone: ${zoneName}. Available: Wilderness, Outer Plains, Deep Forest, Mountain Range, Caverns, Inner Prison, Archbishop's Cellar`);
       return;
     }
 
@@ -209,7 +210,8 @@ class Simulator {
         'Deep Forest': 'deep_forest',
         'Mountain Range': 'mountain_range',
         'Caverns': 'caverns',
-        'Inner Prison': 'inner_prison'
+        'Inner Prison': 'inner_prison',
+        "Archbishop's Cellar": 'archbishops_cellar'
       };
 
       const targetMapType = zoneToMapType[this.targetZone];
