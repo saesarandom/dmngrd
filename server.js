@@ -352,7 +352,8 @@ io.on('connection', (socket) => {
         level: 1,
         monstersKilled: 0,
         deaths: 0,
-        stats: null
+        stats: null,
+        storage: Array(60).fill(null) // Initialize storage
       };
 
       if (character.rows.length > 0 && character.rows[0].stats) {
@@ -365,6 +366,7 @@ io.on('connection', (socket) => {
         if (stats.monstersKilled !== undefined) inventoryData.monstersKilled = stats.monstersKilled;
         if (stats.deaths !== undefined) inventoryData.deaths = stats.deaths;
         if (stats.baseStats) inventoryData.stats = stats.baseStats;
+        if (stats.storage) inventoryData.storage = stats.storage; // Load storage from database
 
         socket.characterId = character.rows[0].id;
 
@@ -725,6 +727,117 @@ io.on('connection', (socket) => {
     });
 
     console.log(`Player ${socket.playerName} gained ${amount} gold`);
+  });
+
+  // ===== STORAGE HANDLERS =====
+
+  socket.on('storage_request', () => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    // Initialize storage if it doesn't exist
+    if (!inventory.storage) {
+      inventory.storage = Array(60).fill(null);
+    }
+
+    // Send storage data to client
+    socket.emit('storage_updated', {
+      slots: inventory.storage
+    });
+  });
+
+  socket.on('storage_move_to_storage', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { inventoryIndex, storageIndex } = data;
+
+    // Validate indices
+    if (inventoryIndex < 0 || inventoryIndex >= 30) return;
+    if (storageIndex < 0 || storageIndex >= 60) return;
+
+    // Initialize storage if it doesn't exist
+    if (!inventory.storage) {
+      inventory.storage = Array(60).fill(null);
+    }
+
+    // Check if storage slot is empty
+    if (inventory.storage[storageIndex] !== null) {
+      socket.emit('error', { message: 'Storage slot is not empty' });
+      return;
+    }
+
+    // Get item from inventory
+    const item = inventory.slots[inventoryIndex];
+    if (!item) return;
+
+    // Move item to storage
+    inventory.storage[storageIndex] = item;
+    inventory.slots[inventoryIndex] = null;
+
+    // Broadcast updates
+    socket.emit('inventory_updated', {
+      slots: inventory.slots,
+      equipped: inventory.equipped,
+      gold: inventory.gold,
+      experience: inventory.experience || 0,
+      level: inventory.level || 1,
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths || 0
+    });
+
+    socket.emit('storage_updated', {
+      slots: inventory.storage
+    });
+
+    console.log(`Player ${socket.playerName} moved ${item.name} to storage`);
+  });
+
+  socket.on('storage_move_to_inventory', (data) => {
+    const inventory = playerInventories.get(socket.id);
+    if (!inventory) return;
+
+    const { storageIndex, inventoryIndex } = data;
+
+    // Validate indices
+    if (storageIndex < 0 || storageIndex >= 60) return;
+    if (inventoryIndex < 0 || inventoryIndex >= 30) return;
+
+    // Initialize storage if it doesn't exist
+    if (!inventory.storage) {
+      inventory.storage = Array(60).fill(null);
+    }
+
+    // Check if inventory slot is empty
+    if (inventory.slots[inventoryIndex] !== null) {
+      socket.emit('error', { message: 'Inventory slot is not empty' });
+      return;
+    }
+
+    // Get item from storage
+    const item = inventory.storage[storageIndex];
+    if (!item) return;
+
+    // Move item to inventory
+    inventory.slots[inventoryIndex] = item;
+    inventory.storage[storageIndex] = null;
+
+    // Broadcast updates
+    socket.emit('inventory_updated', {
+      slots: inventory.slots,
+      equipped: inventory.equipped,
+      gold: inventory.gold,
+      experience: inventory.experience || 0,
+      level: inventory.level || 1,
+      monstersKilled: inventory.monstersKilled || 0,
+      deaths: inventory.deaths || 0
+    });
+
+    socket.emit('storage_updated', {
+      slots: inventory.storage
+    });
+
+    console.log(`Player ${socket.playerName} moved ${item.name} to inventory`);
   });
 
   socket.on('award_experience', async (data) => {
@@ -1139,7 +1252,8 @@ io.on('connection', (socket) => {
             level: inventory.level || 1,
             monstersKilled: inventory.monstersKilled || 0,
             deaths: inventory.deaths || 0,
-            characterStats: inventory.stats || null
+            characterStats: inventory.stats || null,
+            storage: inventory.storage || Array(60).fill(null)
           }), socket.characterId]
         );
         console.log(`✓ Saved inventory for character ${socket.characterId}`);
@@ -1194,7 +1308,8 @@ setInterval(async () => {
             level: inventory.level || 1,
             monstersKilled: inventory.monstersKilled || 0,
             deaths: inventory.deaths || 0,
-            characterStats: inventory.stats || null
+            characterStats: inventory.stats || null,
+            storage: inventory.storage || Array(60).fill(null)
           }), inventory.characterId]
         );
         console.log(`✓ Auto - saved inventory for character ${inventory.characterId}`);

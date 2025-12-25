@@ -253,6 +253,7 @@
   <script src="simulate.js"></script>
   <script src="items.js"></script>
   <script src="inventory.js"></script>
+  <script src="storage.js"></script>
   <script src="levelSystem.js"></script>
   <script src="characterSheet.js"></script>
   <script src="monsters.js"></script>
@@ -284,6 +285,9 @@
 
       const inventory = new Inventory(game, socket);
       game.inventory = inventory;
+
+      const storage = new Storage(game, socket);
+      game.storage = storage;
 
       const movement = new Movement(game);
       const simulator = new Simulator(game, movement);

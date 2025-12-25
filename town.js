@@ -115,7 +115,16 @@ class Town {
     );
 
     if (npc) {
-      this.game.setMessage(`${npc.name}: Hello, traveler!`);
+      // Check if it's the Merchant (storage NPC)
+      if (npc.name === 'Merchant') {
+        this.game.setMessage(`${npc.name}: Welcome! Let me hold your items for safekeeping.`);
+        // Open storage UI
+        if (this.game.storage) {
+          this.game.storage.open();
+        }
+      } else {
+        this.game.setMessage(`${npc.name}: Hello, traveler!`);
+      }
       return true;
     }
     return false;
